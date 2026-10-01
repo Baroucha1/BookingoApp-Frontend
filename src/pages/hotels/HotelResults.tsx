@@ -310,15 +310,20 @@ export default function HotelResults() {
 
     return (
         <div className="min-h-screen bg-[#F0F6FF] pb-6">
-            <div className="relative h-56 overflow-hidden">
+            <div className="relative min-h-[17.5rem] sm:min-h-[19.5rem] overflow-hidden flex flex-col justify-end">
                 <img
                     src="/assets/hotels/result.png"
                     alt=""
                     className="absolute inset-0 w-full h-full object-cover scale-105 blur-sm"
                 />
-                <div className="absolute inset-0 bg-gradient-to-r from-grey/20 via-grey/10 to-grey/5 z-10 pointer-events-none" />
-                <div className="absolute inset-0 bg-gradient-to-b from-grey/20 via-grey/10 to-grey/5 z-10 pointer-events-none" />
-                <div className="relative z-20 max-w-6xl mx-auto px-6 h-full flex flex-col justify-center">
+                <div className="absolute inset-0 bg-gradient-to-r from-black/65 via-black/40 to-black/15 z-10 pointer-events-none" />
+                <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/20 to-[#F0F6FF]/25 z-10 pointer-events-none" />
+                <div
+                    className="relative z-20 max-w-6xl mx-auto px-4 sm:px-6 w-full flex flex-col justify-center pb-12 sm:pb-14"
+                    style={{
+                        paddingTop: 'calc(env(safe-area-inset-top, 0px) + 5.5rem)',
+                    }}
+                >
                     <h1 className="text-2xl sm:text-3xl font-extrabold text-white [text-shadow:_0_2px_12px_rgba(0,0,0,0.9),_0_1px_3px_rgba(0,0,0,0.95)]">
                         {t('hotelHeroTitle')}
                     </h1>
