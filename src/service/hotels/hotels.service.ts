@@ -1,6 +1,5 @@
 // src/service/hotels/hotels.service.ts
 import type { TravellandaHotelDetails } from '@/service/admin/hotel/staticdataTravellenda.ts';
-import {PriceRange} from "@/lib/hotelPricee.ts";
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -137,6 +136,18 @@ export interface BookingContact {
     phone?: string;
 }
 
+export interface BookHotelInput {
+    optionId: string; // opaque token — no provider field sent from the client
+    rooms: BookingRoomInput[];
+    contact: BookingContact;
+    hotelId?: number;
+    hotelName?: string;
+    checkInDate?: string;
+    checkOutDate?: string;
+    boardType?: string;
+    totalPrice?: number;
+    currency?: string;
+}
 
 export interface BookHotelResult {
     id: string;
@@ -155,6 +166,7 @@ export interface PendingVerification {
 }
 
 
+
 // ─── My bookings — requires an authenticated account ───────────────────────
 
 export interface MyHotelBooking {
@@ -168,6 +180,7 @@ export interface MyHotelBooking {
     totalPrice: number | null;
     currency: string | null;
     createdAt: string;
+    // note: no `provider` field — admin-only concern, not shown to the client
 }
 
 export async function getMyHotelBookings(): Promise<MyHotelBooking[]> {
@@ -368,18 +381,3 @@ export interface PendingVerification {
     yourReference: string;
 }
 
-export interface HotelRow {
-    hotel: SearchHotelResult;
-    details?: TravellandaHotelDetails;
-    cheapestTotal: number;
-    perNight: number;
-    star: number;
-}
-
-export interface HotelFilterState {
-    priceRange: PriceRange | null;
-    stars: number[];
-    amenities: string[];
-}
-
-export const EMPTY_FILTERS: HotelFilterState = { priceRange: null, stars: [], amenities: [] };

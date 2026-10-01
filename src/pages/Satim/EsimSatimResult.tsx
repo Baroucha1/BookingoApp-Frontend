@@ -3,7 +3,9 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { CheckCircle2, Loader2, XCircle, ShieldAlert, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { useToast } from '@/hooks/use-toast';
 import confetti from 'canvas-confetti';
+import AppLoading from '@/components/common/AppLoading';
 
 import {
     confirmEsimSatimPayment,
@@ -17,12 +19,14 @@ const formatAmount = (amount: number | string) => `${Number(amount).toFixed(2)} 
 const EsimSatimResult = () => {
     const [searchParams] = useSearchParams();
     const navigate       = useNavigate();
+    const { toast }      = useToast();
 
     const esimOrderId = searchParams.get('esimOrderId');
 
     const [order,        setOrder]        = useState<EsimOrder | null>(null);
     const [status,       setStatus]       = useState<Status>('PENDING');
     const [loading,      setLoading]      = useState(true);
+    const [isCancelled,  setIsCancelled]  = useState(false);
     const [error,        setError]        = useState<string | null>(null);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const confettiFired                   = useRef(false);
@@ -38,6 +42,29 @@ const EsimSatimResult = () => {
     };
 
     useEffect(() => {
+        // Détecter si l'utilisateur a annulé directement sur SATIM
+        const isCancelledQuery =
+            searchParams.get('cancel') === 'true' ||
+            searchParams.get('cancel') === '1' ||
+            searchParams.get('status') === 'cancelled' ||
+            searchParams.get('status') === 'canceled' ||
+            searchParams.get('status') === 'failed' ||
+            searchParams.get('action') === 'cancel' ||
+            searchParams.get('respCode') === '7' ||
+            searchParams.get('errorCode') === '7';
+
+        if (isCancelledQuery) {
+            toast({
+                title: 'Paiement annulé',
+                description: 'Paiement SATIM annulé. Redirection vers les offres eSIM...',
+                variant: 'destructive',
+            });
+            const t = setTimeout(() => {
+                navigate('/esim', { replace: true });
+            }, 800);
+            return () => clearTimeout(t);
+        }
+
         if (!esimOrderId) { setError('Référence de commande introuvable.'); setLoading(false); return; }
 
         const satimOrderId = searchParams.get('mdOrder') ?? searchParams.get('orderId');
@@ -71,14 +98,38 @@ const EsimSatimResult = () => {
                     return;
                 }
 
+                const rawErr = String(
+                    err.respCode_desc ||
+                    err.actionCodeDescription ||
+                    err.message ||
+                    ''
+                );
+                const isCancelErr =
+                    err.rejectionCase === 'CANCELLED' ||
+                    err.respCode === 7 ||
+                    err.respCode === '7' ||
+                    /annul|cancel|declined|refus/i.test(rawErr);
+
                 setStatus('FAILED');
+                setIsCancelled(isCancelErr);
                 setLoading(false);
                 setErrorMessage(
-                    err.respCode_desc         ||
-                    err.actionCodeDescription ||
-                    err.message               ||
-                    null
+                    isCancelErr
+                        ? "Le paiement SATIM a été annulé."
+                        : (err.respCode_desc || err.actionCodeDescription || err.message || null)
                 );
+
+                toast({
+                    title: isCancelErr ? 'Paiement annulé' : 'Paiement échoué',
+                    description: 'Redirection vers les forfaits eSIM...',
+                    variant: 'destructive',
+                });
+
+                const redirectTimer = setTimeout(() => {
+                    navigate('/esim', { replace: true });
+                }, 2500);
+
+                return () => clearTimeout(redirectTimer);
             }
         };
 
@@ -87,13 +138,10 @@ const EsimSatimResult = () => {
     }, [esimOrderId]);
 
     if (loading) return (
-        <div className="min-h-screen flex items-center justify-center">
-            <div className="text-center space-y-4">
-                <Loader2 className="w-10 h-10 animate-spin text-primary mx-auto" />
-                <p className="text-muted-foreground text-sm">Confirmation du paiement en cours...</p>
-                <p className="text-muted-foreground text-xs">Cela peut prendre jusqu'à 30 secondes</p>
-            </div>
-        </div>
+        <AppLoading
+            message="Confirmation du paiement en cours..."
+            subMessage="Vérification auprès de SATIM, cela peut prendre quelques instants..."
+        />
     );
 
     if (error) return (
@@ -102,7 +150,7 @@ const EsimSatimResult = () => {
                 <AlertCircle className="w-10 h-10 text-destructive mx-auto" />
                 <p className="font-semibold">Une erreur est survenue</p>
                 <p className="text-muted-foreground text-sm">{error}</p>
-                <Button onClick={() => navigate('/')}>Retour à l'accueil</Button>
+                <Button onClick={() => navigate('/esim')}>Retour aux offres eSIM</Button>
             </div>
         </div>
     );
@@ -139,18 +187,14 @@ const EsimSatimResult = () => {
                     <h1 className="text-2xl font-bold">
                         {status === 'PAID'                   && 'Paiement confirmé'}
                         {status === 'PAID_FULFILLMENT_ERROR' && 'Paiement reçu — commande en cours de résolution'}
-                        {status === 'FAILED'                 && 'Paiement échoué'}
+                        {status === 'FAILED'                 && (isCancelled ? 'Paiement annulé' : 'Paiement échoué')}
                         {status === 'PENDING'                && 'Paiement en attente'}
                     </h1>
                     <p className="text-muted-foreground mt-2 text-sm">
-                        {status === 'PAID' &&
-                            `Votre eSIM ${order?.locationName ?? ''} est en cours de préparation. Vous recevrez un email dès qu'elle sera prête.`}
-                        {status === 'PAID_FULFILLMENT_ERROR' &&
-                            "Votre paiement a été confirmé, mais nous n'avons pas pu finaliser votre commande eSIM automatiquement. Notre équipe a été alertée et vous contactera rapidement — aucune action n'est requise de votre part."}
-                        {status === 'FAILED' &&
-                            (errorMessage ?? "Votre paiement n'a pas pu être traité. Vous pouvez réessayer.")}
-                        {status === 'PENDING' &&
-                            "Le statut de votre paiement n'a pas encore été mis à jour. Vérifiez dans quelques minutes."}
+                        {status === 'PAID'                   && `Votre eSIM pour ${order?.country?.nameFr ?? 'votre destination'} est prête.`}
+                        {status === 'PAID_FULFILLMENT_ERROR' && (errorMessage ?? "Votre paiement est validé mais une erreur est survenue lors de l'activation. Notre support s'en occupe.")}
+                        {status === 'FAILED'                 && (errorMessage ?? (isCancelled ? "Le paiement SATIM a été annulé. Redirection vers les forfaits eSIM..." : "Votre paiement n'a pas pu être traité. Vous pouvez réessayer."))}
+                        {status === 'PENDING'                && "Le statut de votre commande n'a pas encore été mis à jour. Vérifiez dans quelques minutes."}
                     </p>
                 </div>
 
@@ -179,6 +223,7 @@ const EsimSatimResult = () => {
                                         timeZone: 'Africa/Algiers',
                                         day: '2-digit', month: '2-digit', year: 'numeric',
                                         hour: '2-digit', minute: '2-digit',
+                                        hour12: false,
                                     })}
                                 </span>
                             </div>
@@ -225,7 +270,7 @@ const EsimSatimResult = () => {
                         <Button onClick={() => navigate('/esim')}
                                 className="text-white font-semibold rounded-full px-6"
                                 style={{ background: 'linear-gradient(135deg, #0865FE, #3B2F7E)' }}>
-                            Réessayer
+                            Retour aux forfaits eSIM
                         </Button>
                         <Button variant="outline" onClick={() => navigate('/esim/my-orders')} className="rounded-full px-6">
                             Mes eSIMs

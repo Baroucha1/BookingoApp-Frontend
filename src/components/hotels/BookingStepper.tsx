@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { Check } from 'lucide-react';
+import { useLanguage } from '@/i18n/LanguageContext';
 
 export interface StepperStep {
     label: string;
@@ -11,6 +12,7 @@ interface BookingStepperProps {
 }
 
 export default function BookingStepper({ steps, currentStep }: BookingStepperProps) {
+    const { t } = useLanguage();
     const percent = Math.round(((currentStep + 1) / steps.length) * 100);
 
     return (
@@ -18,13 +20,13 @@ export default function BookingStepper({ steps, currentStep }: BookingStepperPro
             <div className="flex items-center justify-between mb-6">
                 <div>
                     <p className="text-xs font-semibold tracking-wide text-blue-500 uppercase">
-                        Étape {currentStep + 1} sur {steps.length}
+                        {t('hotelStep')} {currentStep + 1} {t('hotelStepOf')} {steps.length}
                     </p>
                     <h2 className="text-xl font-bold text-gray-900 mt-0.5">{steps[currentStep].label}</h2>
                 </div>
                 <div className="flex items-center gap-2 bg-blue-50 text-blue-600 text-sm font-medium px-3 py-1.5 rounded-full">
                     <div className="w-3.5 h-3.5 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
-                    {percent}% complété
+                    {percent}% {t('hotelCompleted')}
                 </div>
             </div>
 

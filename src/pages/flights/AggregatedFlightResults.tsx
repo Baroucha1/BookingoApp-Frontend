@@ -8,7 +8,7 @@ import AggregatedFlightDetailModal from "@/components/flights/flightResults/Aggr
 import { encodeSearchParams, decodeSearchParams } from '@/service/flights_aggregator/SearchParmsCodec.ts';
 import { getNearbyDates, NearbyDatePrice } from '@/service/flights_aggregator/aggregatedSearch.service';
 import NearbyDatesCarousel from '../../components/flights/NearbyDatesCarousel';
-import {CalendarSearch, Loader2} from 'lucide-react';
+import {CalendarSearch, Loader2, ArrowLeft} from 'lucide-react';
 import FilterPanel from '@/components/flights/flightResults/FilterPanel.tsx';
 import { offerMatchesFilters, defaultFilters, type Filters } from '@/service/flights_aggregator/filterHelpers';
 import FilterPillBar from '@/components/flights/flightResults/mobileFilters/FilterPillBar';
@@ -20,7 +20,7 @@ import { useRef } from 'react';
 
 import { cn } from "@/lib/utils.ts";
 import {getAirlineLogo} from "@/service/flights/airlines.ts";
-import {useLocation, useNavigate, useSearchParams} from "react-router-dom";
+import {useNavigate, useSearchParams} from "react-router-dom";
 import ResultsHero from "@/components/flights/flightResults/ResultsHero.tsx";
 
 const PROVIDER_LABELS: Record<string, string> = {
@@ -35,7 +35,7 @@ function PlaneIcon({ className }: PlaneIconProps) {
 }
 export default function AggregatedFlightResults() {
     const navigate = useNavigate();
-    const location = useLocation();
+
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [modalOpen, setModalOpen] = useState(false);
@@ -64,32 +64,16 @@ export default function AggregatedFlightResults() {
     const PAGE_SIZE = 20;
     const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
-    const normalizedGroups = useMemo(
-        () => flightGroups.map((group) => ({ group, cheapest: normalizeAggregatedOffer(group.offers[0]) })),
-        [flightGroups],
+    const visibleGroups = flightGroups.filter((g) => {
+        const cheapest = normalizeAggregatedOffer(g.offers[0]);
+        return (!providerFilter || cheapest.provider === providerFilter) &&
+            (!quickAirline || cheapest.airlineCode === quickAirline);
+    });
+
+    const offers = useMemo(
+        () => flightGroups.map((g) => normalizeAggregatedOffer(g.offers[0])),
+        [flightGroups]
     );
-
-    const offers = useMemo(() => normalizedGroups.map((n) => n.cheapest), [normalizedGroups]);
-
-    const sortedGroups = useMemo(() => {
-        const filtered = normalizedGroups.filter(({ cheapest }) =>
-            (!providerFilter || cheapest.provider === providerFilter) &&
-            (!quickAirline || cheapest.airlineCode === quickAirline) &&
-            offerMatchesFilters(cheapest, filters),
-        );
-        return filtered.sort((a, b) => {
-            const ca = a.cheapest;
-            const cb = b.cheapest;
-            switch (filters.sort) {
-                case 'price-desc': return cb.price - ca.price;
-                case 'duration': return ca.totalMinutes - cb.totalMinutes;
-                case 'departure': return ca.departureTime.localeCompare(cb.departureTime);
-                case 'arrival': return ca.arrivalTime.localeCompare(cb.arrivalTime);
-                default: return ca.price - cb.price;
-            }
-        });
-    }, [normalizedGroups, providerFilter, quickAirline, filters]);
-
 
     const maxAvailablePrice = useMemo(
         () => (offers.length ? Math.max(...offers.map((o) => o.price)) : 200000),
@@ -98,8 +82,20 @@ export default function AggregatedFlightResults() {
 
     const isRoundTrip = useMemo(() => offers.some((o) => o.legs.length > 1), [offers]);
 
-
-
+    const filteredGroups = visibleGroups.filter((g) =>
+        offerMatchesFilters(normalizeAggregatedOffer(g.offers[0]), filters)
+    );
+    const sortedGroups = [...filteredGroups].sort((a, b) => {
+        const ca = normalizeAggregatedOffer(a.offers[0]);
+        const cb = normalizeAggregatedOffer(b.offers[0]);
+        switch (filters.sort) {
+            case 'price-desc': return cb.price - ca.price;
+            case 'duration': return ca.totalMinutes - cb.totalMinutes;
+            case 'departure': return ca.departureTime.localeCompare(cb.departureTime);
+            case 'arrival': return ca.arrivalTime.localeCompare(cb.arrivalTime);
+            default: return ca.price - cb.price; // price-asc
+        }
+    });
 
     const { showPrompt, resetTimer, dismissWithRefresh, dismissWithNewSearch } = useStaleResultsPrompt({
         active: flightGroups.length > 0 && !loading,
@@ -159,46 +155,21 @@ export default function AggregatedFlightResults() {
         setProviderFilter(p);
         setQuickAirline(null);
     };
-    const searchIdRef = useRef(0);
+
     async function runSearch(params: AggregatedSearchParams) {
-        const searchId = ++searchIdRef.current;
         setLoading(true);
         setError(null);
         setPendingParams(params);
-
-        // Different route/passengers/cabin → the nearby-dates carousel is no longer valid
-        const prev = lastSearchParams;
-        const sameRoute = !!prev &&
-            prev.origin === params.origin &&
-            prev.destination === params.destination &&
-            prev.adults === params.adults &&
-            prev.children === params.children &&
-            prev.infants === params.infants &&
-            prev.cabinClass === params.cabinClass;
-        if (!sameRoute) {
-            setNearbyDates(null);
-            setNearbyDatesError(null);
-        }
-
         try {
             const raw = await searchFlightsAggregated(params);
-            if (searchId !== searchIdRef.current) return; // a newer search has started
-
             const groups = groupByFlightIdentity(raw);
             setFlightGroups(groups);
             setLastSearchParams(params);
             handleProviderFilterChange(null);
-
-            const maxPrice = groups.length
-                ? Math.max(...groups.map((g) => normalizeAggregatedOffer(g.offers[0]).price))
-                : 200000;
-            setFilters(defaultFilters(maxPrice));
-        } catch (err: unknown) {
-            if (searchId !== searchIdRef.current) return;
-            setFlightGroups([]);
-            setError(err instanceof Error ? err.message : 'Échec de la recherche');
+        } catch (err: any) {
+            setError(err.message);
         } finally {
-            if (searchId === searchIdRef.current) setLoading(false);
+            setLoading(false);
         }
     }
 
@@ -255,15 +226,12 @@ export default function AggregatedFlightResults() {
 
     function handleContinue(offer: DisplayOffer) {
         setModalOpen(false);
-        const payload = {
-            offer,
-            searchParams: lastSearchParams,
-            returnTo: { pathname: location.pathname, search: location.search },
-        };   navigate('/flights/booking', { state: payload });
+        sessionStorage.setItem('pendingFlightBooking', JSON.stringify({ offer, searchParams: lastSearchParams }));
+        navigate('/flights/booking', { state: { offer, searchParams: lastSearchParams } });
     }
 
     return (
-        <div className="bg-[#DFECFF]">
+        <div className="min-h-screen bg-gradient-to-b from-[#DFECFF] via-[#F0F6FF] to-[#DFECFF] pb-24">
 
             <FlightSearchLoadingOverlay
                 active={loading}
@@ -272,7 +240,7 @@ export default function AggregatedFlightResults() {
             />
             {searchFormOpen && (
                 <div
-                    className="fixed inset-0 z-40 bg-black/30"
+                    className="fixed inset-0 z-40 bg-black/30 backdrop-blur-xs"
                     aria-hidden="true"
                 />
             )}
@@ -293,7 +261,7 @@ export default function AggregatedFlightResults() {
                                 type="button"
                                 onClick={handleShowNearbyDates}
                                 disabled={nearbyDatesLoading}
-                                className="flex items-center gap-2 text-sm font-medium text-[#0454E8] hover:underline disabled:opacity-60"
+                                className="flex items-center gap-2 text-sm font-semibold text-[#0454E8] hover:underline disabled:opacity-60 bg-white/70 backdrop-blur-xs px-3.5 py-2 rounded-xl border border-sky-100 shadow-2xs"
                             >
                                 {nearbyDatesLoading ? (
                                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -318,6 +286,7 @@ export default function AggregatedFlightResults() {
                     </div>
                 )}
 
+                {/* Airlines chips carousel - visible on both mobile and desktop */}
                 <div className="w-full min-w-0 mb-5">
                     <div
                         ref={airlineScrollRef}
@@ -326,17 +295,17 @@ export default function AggregatedFlightResults() {
                         onMouseUp={handleAirlineMouseUp}
                         onMouseMove={handleAirlineMouseMove}
                         className={cn(
-                            'hidden md:flex overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden cursor-grab active:cursor-grabbing select-none'
+                            'flex overflow-x-auto snap-x scrollbar-none pb-2 pt-1 cursor-grab active:cursor-grabbing select-none'
                         )}
                     >
-                        <div className="flex items-center gap-2 min-w-max">
+                        <div className="flex items-center gap-2 min-w-max px-0.5">
                             <button
                                 onClick={() => setQuickAirline(null)}
                                 className={cn(
-                                    'px-4 py-2.5 rounded-xl text-sm font-semibold border transition shrink-0',
+                                    'px-4 py-2.5 rounded-2xl text-sm font-bold border transition shrink-0 shadow-2xs',
                                     quickAirline === null
-                                        ? 'bg-[#3566E3] text-white border-[#3566E3] shadow-sm'
-                                        : 'bg-white text-slate-700 border-slate-200 hover:border-[#3566E3]/50'
+                                        ? 'bg-[#3566E3] text-white border-[#3566E3]'
+                                        : 'bg-white/90 text-slate-700 border-slate-200 hover:border-[#3566E3]/50 hover:bg-white'
                                 )}
                             >
                                 Toutes
@@ -346,36 +315,36 @@ export default function AggregatedFlightResults() {
                                     key={a.code}
                                     onClick={() => setQuickAirline(a.code === quickAirline ? null : a.code)}
                                     className={cn(
-                                        'px-3 py-2 rounded-xl text-sm font-medium border transition shrink-0 flex items-center gap-2.5',
+                                        'snap-start px-3.5 py-2 rounded-2xl text-sm font-medium border transition shrink-0 flex items-center gap-2.5 shadow-2xs',
                                         quickAirline === a.code
-                                            ? 'bg-white text-slate-900 border-[#F5A623] ring-2 ring-[#F5A623]/30 shadow-sm'
-                                            : 'bg-white text-slate-700 border-slate-200 hover:border-[#3566E3]/50 hover:shadow-sm'
+                                            ? 'bg-white text-slate-900 border-[#FFAA01] ring-2 ring-[#FFAA01]/30 font-bold'
+                                            : 'bg-white/90 text-slate-700 border-slate-200 hover:border-[#3566E3]/50 hover:bg-white'
                                     )}
                                 >
                                     <img
                                         src={getAirlineLogo(a.code)}
                                         alt={a.name}
-                                        className="w-6 h-6 object-contain rounded"
+                                        className="w-6 h-6 object-contain rounded-md"
                                         onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                                     />
-                                    <span>{a.name}</span>
+                                    <span className="font-semibold text-slate-800">{a.name}</span>
                                     <span className="text-xs text-slate-400">({a.count})</span>
-                                    <span className="text-xs tabular-nums font-semibold text-[#F5A623]">
-                        {a.min.toLocaleString()} {a.currency}
-                    </span>
+                                    <span className="text-xs tabular-nums font-extrabold text-[#FFAA01]">
+                                        {a.min.toLocaleString()} {a.currency}
+                                    </span>
                                 </button>
                             ))}
                         </div>
                     </div>
                 </div>
             {availableProviders.length > 1 && (
-                <div className="flex items-center gap-2 mt-6 mb-3">
+                <div className="flex items-center gap-2 mt-4 mb-4 overflow-x-auto scrollbar-none pb-1">
                     <button
                         type="button"
                         onClick={() => handleProviderFilterChange(null)}
                         className={cn(
-                            'px-3 py-1.5 rounded-full text-xs font-medium border transition',
-                            providerFilter === null ? 'bg-[#F5A623] text-white border-[#F5A623]' : 'bg-white text-slate-600 border-slate-200'
+                            'px-3.5 py-1.5 rounded-full text-xs font-bold border transition shadow-2xs shrink-0',
+                            providerFilter === null ? 'bg-[#3566E3] text-white border-[#3566E3]' : 'bg-white text-slate-600 border-slate-200'
                         )}
                     >
                         Tous ({offers.length})
@@ -388,8 +357,8 @@ export default function AggregatedFlightResults() {
                                 type="button"
                                 onClick={() => handleProviderFilterChange(p)}
                                 className={cn(
-                                    'px-3 py-1.5 rounded-full text-xs font-medium border transition',
-                                    providerFilter === p ? 'bg-[#F5A623] text-white border-[#F5A623]' : 'bg-white text-slate-600 border-slate-200'
+                                    'px-3.5 py-1.5 rounded-full text-xs font-bold border transition shadow-2xs shrink-0',
+                                    providerFilter === p ? 'bg-[#3566E3] text-white border-[#3566E3]' : 'bg-white text-slate-600 border-slate-200'
                                 )}
                             >
                                 {PROVIDER_LABELS[p] ?? p} ({count})
@@ -421,9 +390,17 @@ export default function AggregatedFlightResults() {
                             <div className="flex flex-col items-center justify-center text-center py-16 px-4 bg-white rounded-2xl border border-slate-200">
                                 <div className="text-4xl mb-3"><PlaneIcon className="w-16 h-16 object-contain" /> </div>
                                 <h3 className="text-lg font-bold text-[#002161] mb-1">Aucun vol trouvé</h3>
-                                <p className="text-sm text-slate-500 max-w-sm">
+                                <p className="text-sm text-slate-500 max-w-sm mb-4">
                                     Nous n'avons trouvé aucun vol correspondant à votre recherche. Essayez de modifier vos dates ou votre destination.
                                 </p>
+                                <button
+                                    type="button"
+                                    onClick={() => navigate('/flights')}
+                                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#3566E3] hover:bg-[#2851b8] text-white text-sm font-bold shadow-sm transition active:scale-95 cursor-pointer"
+                                >
+                                    <ArrowLeft className="w-4 h-4" />
+                                    <span>Retour aux vols</span>
+                                </button>
                             </div>
                         ) : sortedGroups.length === 0 && flightGroups.length > 0 ? (
                             <div className="flex flex-col items-center justify-center text-center py-16 px-4 bg-white rounded-2xl border border-slate-200">
@@ -442,14 +419,17 @@ export default function AggregatedFlightResults() {
                             </div>
                         ) : (
                             <>
-                                {paginatedGroups.map(({ group, cheapest }) => (
-                                    <AggregatedFlightCard
-                                        key={group.key}
-                                        offer={cheapest}
-                                        fareCount={group.offers.length}
-                                        onSelect={() => handleSelect(group)}
-                                    />
-                                ))}
+                                {paginatedGroups.map((group) => {
+                                    const cheapest = normalizeAggregatedOffer(group.offers[0]);
+                                    return (
+                                        <AggregatedFlightCard
+                                            key={group.key}
+                                            offer={cheapest}
+                                            fareCount={group.offers.length}
+                                            onSelect={() => handleSelect(group)}
+                                        />
+                                    );
+                                })}
 
                                 {visibleCount < sortedGroups.length && (
                                     <button

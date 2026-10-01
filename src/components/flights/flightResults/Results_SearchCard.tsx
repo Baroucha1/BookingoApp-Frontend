@@ -1,4 +1,3 @@
-// src/components/Flights/AggregatedSearchForm.tsx
 import { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
 import {
     ArrowLeftRight, Calendar, MapPin, Search,
@@ -18,7 +17,81 @@ import {
     getDayState,
 } from '../search/SearchFormUtils.ts';
 import type {  DayState } from '../search/SearchFormUtils.ts';
-import {AirportInputProps} from "@/components/flights/search/SearchFormShared.tsx";
+import { AirportInputProps } from "@/components/flights/search/SearchFormShared.tsx";
+import { useToast } from '@/hooks/use-toast.ts';
+import { useLanguage } from '@/i18n/LanguageContext.tsx';
+
+const cardTexts = {
+    fr: {
+        from: "Départ",
+        to: "Destination",
+        fromPlaceholder: "D'où ?",
+        toPlaceholder: "Où ?",
+        dates: "Dates",
+        date: "Date",
+        returnDate: "Retour",
+        passengersClass: "Passagers / Classe",
+        passengers: "passager",
+        passengersPlural: "passagers",
+        search: "Rechercher un vol",
+        searching: "Recherche...",
+        addFlight: "Ajouter un vol",
+        notAvailable: "Non disponible",
+        originRequired: "Aéroport de départ obligatoire",
+        destRequired: "Aéroport de destination obligatoire",
+        sameAirportError: "Le départ et la destination doivent être différents",
+        departDateRequired: "Date de départ obligatoire",
+        returnDateRequired: "Date de retour obligatoire",
+        multiCityError: "Veuillez compléter toutes les étapes",
+        searchErrorTitle: "Recherche incomplète",
+    },
+    en: {
+        from: "Departure",
+        to: "Destination",
+        fromPlaceholder: "Where from?",
+        toPlaceholder: "Where to?",
+        dates: "Dates",
+        date: "Date",
+        returnDate: "Return",
+        passengersClass: "Passengers / Class",
+        passengers: "passenger",
+        passengersPlural: "passengers",
+        search: "Search flights",
+        searching: "Searching...",
+        addFlight: "Add a flight",
+        notAvailable: "Not available",
+        originRequired: "Departure airport is required",
+        destRequired: "Destination airport is required",
+        sameAirportError: "Departure and destination must be different",
+        departDateRequired: "Departure date is required",
+        returnDateRequired: "Return date is required",
+        multiCityError: "Please complete all flight legs",
+        searchErrorTitle: "Incomplete search",
+    },
+    ar: {
+        from: "المغادرة",
+        to: "الوجهة",
+        fromPlaceholder: "من أين؟",
+        toPlaceholder: "إلى أين؟",
+        dates: "التواريخ",
+        date: "التاريخ",
+        returnDate: "العودة",
+        passengersClass: "المسافرون / الدرجة",
+        passengers: "مسافر",
+        passengersPlural: "مسافرين",
+        search: "بحث عن رحلة",
+        searching: "جاري البحث...",
+        addFlight: "إضافة رحلة",
+        notAvailable: "غير متاح",
+        originRequired: "مطار المغادرة إجباري",
+        destRequired: "مطار الوصول إجباري",
+        sameAirportError: "يجب أن يكون مطار المغادرة مختلفاً عن الوصول",
+        departDateRequired: "تاريخ المغادرة إجباري",
+        returnDateRequired: "تاريخ العودة إجباري",
+        multiCityError: "يرجى إكمال جميع مراحل الرحلة",
+        searchErrorTitle: "بحث غير مكتمل",
+    },
+};
 
 interface Props {
     onSubmit: (p: AggregatedSearchParams) => void;
@@ -82,13 +155,27 @@ export interface AirportInputHandle {
 }
 
 /** Compact inline field: small uppercase label + value, no border/box */
-function InlineField({ label, children, className, onClick }: {
+function InlineField({ label, children, className, onClick, required, error }: {
     label: string; children: React.ReactNode; className?: string; onClick?: () => void;
+    required?: boolean; error?: boolean | string;
 }) {
     return (
         <div onClick={onClick} className={cn('min-w-0', onClick && 'cursor-pointer', className)}>
-            <div className="text-[10px] uppercase tracking-wide text-[#94A3B8] font-medium mb-0.5">{label}</div>
-            {children}
+            <div className="flex items-center justify-between gap-1 mb-0.5">
+                <div className="text-[10px] uppercase tracking-wide text-[#94A3B8] font-medium flex items-center gap-1">
+                    <span>{label}</span>
+                    {required && <span className="text-red-500 font-bold" title="Obligatoire">*</span>}
+                </div>
+                {typeof error === 'string' && error && (
+                    <span className="text-[9px] font-semibold text-red-500 truncate max-w-[120px]">{error}</span>
+                )}
+            </div>
+            <div className={cn(
+                "transition-all duration-150 rounded-lg",
+                error && "ring-1 ring-red-400 bg-red-50/50 p-1 -m-1"
+            )}>
+                {children}
+            </div>
         </div>
     );
 }
@@ -183,8 +270,10 @@ const AirportInput = forwardRef<AirportInputHandle, AirportInputProps>(function 
             {open && (
                 <div className="absolute z-50 left-0 w-[280px] mt-2 bg-white border border-[#E2E8F0] rounded-2xl shadow-2xl max-h-72 overflow-y-auto">
                     {suggestions.map((a) => (
-                        <button key={a.code} type="button" onMouseDown={() => handleSelect(a)}
-                                className="w-full px-4 py-3 hover:bg-[#FFF9F0] flex items-center justify-between gap-3 text-left border-b border-[#F1F5F9] last:border-0 transition">
+                        <button key={a.code} type="button"
+                                onMouseDown={(e) => { e.preventDefault(); handleSelect(a); }}
+                                onTouchEnd={(e) => { e.preventDefault(); handleSelect(a); }}
+                                className="w-full px-4 py-3 hover:bg-[#FFF9F0] active:bg-[#FFF3E0] flex items-center justify-between gap-3 text-left border-b border-[#F1F5F9] last:border-0 transition">
                             <div className="flex items-center gap-3 min-w-0">
                                 {getRecentAirports().find((r) => r.code === a.code) && <Clock className="w-4 h-4 text-[#3D8BF0] shrink-0" />}
                                 <MapPin className="w-4 h-4 text-[#A0AEC0] shrink-0" />
@@ -199,8 +288,9 @@ const AirportInput = forwardRef<AirportInputHandle, AirportInputProps>(function 
                     {onShowAllDestinations && (
                         <button
                             type="button"
-                            onMouseDown={() => { onShowAllDestinations(); setOpen(false); }}
-                            className="w-full px-4 py-3 flex items-center gap-2 text-left text-sm font-medium text-[#3D8BF0] hover:bg-[#FFF9F0] transition"
+                            onMouseDown={(e) => { e.preventDefault(); onShowAllDestinations(); setOpen(false); }}
+                            onTouchEnd={(e) => { e.preventDefault(); onShowAllDestinations(); setOpen(false); }}
+                            className="w-full px-4 py-3 flex items-center gap-2 text-left text-sm font-medium text-[#3D8BF0] hover:bg-[#FFF9F0] active:bg-[#FFF3E0] transition"
                         >
                             🌐 Voir toutes les destinations
                         </button>
@@ -279,7 +369,15 @@ function SingleDatePicker({value, onChange, onClose, minDate,}: { value: string;
     );
 }
 
-function DateField({ value, onChange, label = 'Départ', minDate, align = 'left' }: { value: string; onChange: (v: string) => void; label?: string; minDate?: string; align?: 'left' | 'right'; }) {
+function DateField({ value, onChange, label = 'Départ', minDate, align = 'left', required, error }: {
+    value: string;
+    onChange: (v: string) => void;
+    label?: string;
+    minDate?: string;
+    align?: 'left' | 'right';
+    required?: boolean;
+    error?: boolean | string;
+}) {
     const [open, setOpen] = useState(false);
     const ref = useRef<HTMLDivElement>(null);
 
@@ -298,7 +396,7 @@ function DateField({ value, onChange, label = 'Départ', minDate, align = 'left'
 
     return (
         <div ref={ref} className="relative">
-            <InlineField label={label} onClick={() => setOpen((v) => !v)}>
+            <InlineField label={label} onClick={() => setOpen((v) => !v)} required={required} error={error}>
                 <div className="flex items-center gap-1.5">
                     <Calendar className="w-3.5 h-3.5 text-[#F5A623] shrink-0" />
                     <span className="font-bold text-[#0B0F2E] text-sm whitespace-nowrap">{fmtDate(value)}</span>
@@ -433,6 +531,8 @@ function DualCalendar({
 /** Combined trigger for Départ (+ Retour when roundtrip) — opens the DualCalendar popover */
 function DateRangeTrigger({
                               tripType, startDate, endDate, open, onOpenChange, onChangeStart, onChangeEnd,
+                              departLabel = 'Départ', returnLabel = 'Retour',
+                              departRequired, returnRequired, departError, returnError,
                           }: {
     tripType: FormState['tripType'];
     startDate: string;
@@ -441,6 +541,12 @@ function DateRangeTrigger({
     onOpenChange: (o: boolean) => void;
     onChangeStart: (v: string) => void;
     onChangeEnd: (v: string) => void;
+    departLabel?: string;
+    returnLabel?: string;
+    departRequired?: boolean;
+    returnRequired?: boolean;
+    departError?: boolean | string;
+    returnError?: boolean | string;
 }) {
     const ref = useRef<HTMLDivElement>(null);
     const isRange = tripType === 'roundtrip';
@@ -460,8 +566,16 @@ function DateRangeTrigger({
 
     return (
         <div ref={ref} className="relative flex items-center gap-4">
-            <div className="cursor-pointer" onClick={() => onOpenChange(!open)}>
-                <div className="text-[10px] uppercase tracking-wide text-[#94A3B8] font-medium mb-0.5">Départ</div>
+            <div className={cn("cursor-pointer rounded-lg transition-all", departError && "ring-1 ring-red-400 bg-red-50/50 p-1 -m-1")} onClick={() => onOpenChange(!open)}>
+                <div className="flex items-center justify-between gap-1 mb-0.5">
+                    <div className="text-[10px] uppercase tracking-wide text-[#94A3B8] font-medium flex items-center gap-1">
+                        <span>{departLabel}</span>
+                        {departRequired && <span className="text-red-500 font-bold" title="Obligatoire">*</span>}
+                    </div>
+                    {typeof departError === 'string' && departError && (
+                        <span className="text-[9px] font-semibold text-red-500 truncate max-w-[120px]">{departError}</span>
+                    )}
+                </div>
                 <div className="flex items-center gap-1.5">
                     <Calendar className="w-3.5 h-3.5 text-[#F5A623] shrink-0" />
                     <span className="font-bold text-[#0B0F2E] text-sm whitespace-nowrap">{fmtDate(startDate)}</span>
@@ -472,8 +586,16 @@ function DateRangeTrigger({
             {isRange && (
                 <>
                     <div className="w-px h-9 border-l border-dashed border-[#3D8BF0]/40 shrink-0" />
-                    <div className="cursor-pointer" onClick={() => onOpenChange(!open)}>
-                        <div className="text-[10px] uppercase tracking-wide text-[#94A3B8] font-medium mb-0.5">Retour</div>
+                    <div className={cn("cursor-pointer rounded-lg transition-all", returnError && "ring-1 ring-red-400 bg-red-50/50 p-1 -m-1")} onClick={() => onOpenChange(!open)}>
+                        <div className="flex items-center justify-between gap-1 mb-0.5">
+                            <div className="text-[10px] uppercase tracking-wide text-[#94A3B8] font-medium flex items-center gap-1">
+                                <span>{returnLabel}</span>
+                                {returnRequired && <span className="text-red-500 font-bold" title="Obligatoire">*</span>}
+                            </div>
+                            {typeof returnError === 'string' && returnError && (
+                                <span className="text-[9px] font-semibold text-red-500 truncate max-w-[120px]">{returnError}</span>
+                            )}
+                        </div>
                         <div className="flex items-center gap-1.5">
                             <Calendar className="w-3.5 h-3.5 text-[#F5A623] shrink-0" />
                             <span className="font-bold text-[#0B0F2E] text-sm whitespace-nowrap">{fmtDate(endDate)}</span>
@@ -512,17 +634,22 @@ function TripTypeToggle({ value, onChange }: { value: FormState['tripType']; onC
                     key={o.key}
                     type="button"
                     onClick={() => onChange(o.key)}
-                    className="group flex items-center gap-1.5 text-xs font-semibold text-[#3566E3]"
+                    className={cn(
+                        'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all',
+                        value === o.key
+                            ? 'bg-[#1775FF] text-white shadow-sm shadow-blue-500/20'
+                            : 'text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
+                    )}
                 >
                     <span
                         className={cn(
                             'w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center transition-colors',
-                            value === o.key ? 'border-[#0454E8]' : 'border-[#CBD5E1] group-hover:border-[#F5A623]'
+                            value === o.key ? 'border-white' : 'border-[#CBD5E1]'
                         )}
                     >
-                        {value === o.key && <span className="w-1.5 h-1.5 rounded-full bg-[#0454E8]" />}
+                        {value === o.key && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
                     </span>
-                    <span className={cn(value !== o.key && 'text-[#94A3B8]')}>{o.label}</span>
+                    <span>{o.label}</span>
                 </button>
             ))}
         </div>
@@ -581,10 +708,19 @@ export default function AggregatedSearchForm({ onSubmit, loading, initialParams 
         });
     };
 
-    const returnDateMissing = p.tripType === 'roundtrip' && !p.retourleVol1;
+    const { toast } = useToast();
+    const { language } = useLanguage();
+    const t = cardTexts[language] || cardTexts.fr;
+    const [attemptedSubmit, setAttemptedSubmit] = useState(false);
+
+    const originMissing = p.tripType !== 'multicity' && !p.departVol1?.trim();
+    const destMissing = p.tripType !== 'multicity' && !p.destinationVol1?.trim();
+    const sameAirport = p.tripType !== 'multicity' && !!p.departVol1 && !!p.destinationVol1 && p.departVol1.trim().toUpperCase() === p.destinationVol1.trim().toUpperCase();
+    const departDateMissing = p.tripType !== 'multicity' && !p.departleVol1?.trim();
+    const returnDateMissing = p.tripType === 'roundtrip' && !p.retourleVol1?.trim();
     const multiCityIncomplete =
         p.tripType === 'multicity' &&
-        (p.legs.length < 2 || p.legs.some((leg) => !leg.origin || !leg.destination || !leg.date));
+        (p.legs.length < 2 || p.legs.some((leg) => !leg.origin?.trim() || !leg.destination?.trim() || !leg.date?.trim() || leg.origin.trim().toUpperCase() === leg.destination.trim().toUpperCase()));
 
     useEffect(() => {
         getAggregatedDestinations()
@@ -624,7 +760,36 @@ export default function AggregatedSearchForm({ onSubmit, loading, initialParams 
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (passengerError || multiCityIncomplete || returnDateMissing) return;
+        setAttemptedSubmit(true);
+
+        if (originMissing) {
+            toast({ title: t.searchErrorTitle, description: t.originRequired, variant: 'destructive' });
+            return;
+        }
+        if (destMissing) {
+            toast({ title: t.searchErrorTitle, description: t.destRequired, variant: 'destructive' });
+            return;
+        }
+        if (sameAirport) {
+            toast({ title: t.searchErrorTitle, description: t.sameAirportError, variant: 'destructive' });
+            return;
+        }
+        if (departDateMissing) {
+            toast({ title: t.searchErrorTitle, description: t.departDateRequired, variant: 'destructive' });
+            return;
+        }
+        if (returnDateMissing) {
+            toast({ title: t.searchErrorTitle, description: t.returnDateRequired, variant: 'destructive' });
+            return;
+        }
+        if (multiCityIncomplete) {
+            toast({ title: t.searchErrorTitle, description: t.multiCityError, variant: 'destructive' });
+            return;
+        }
+        if (passengerError) {
+            toast({ title: t.searchErrorTitle, description: passengerError, variant: 'destructive' });
+            return;
+        }
 
         if (p.tripType === 'multicity') {
             onSubmit({
@@ -698,176 +863,216 @@ export default function AggregatedSearchForm({ onSubmit, loading, initialParams 
 
                 {p.tripType === 'multicity' ? (
                     <div className="space-y-2">
-                        {p.legs.map((leg, i) => (
-                            <div key={i} className="flex items-center gap-4 flex-wrap py-2 border-b border-slate-100 last:border-0">
-                                <InlineField label={`Départ ${i + 1}`} className="w-32">
-                                    <AirportInput
-                                        value={leg.origin}
-                                        selectedAirport={leg.originAirport ?? null}
-                                        onChange={(code, a) => updateLeg(i, { origin: code, originAirport: a ?? null })}
-                                        placeholder="D'où ?"
-                                    />
-                                </InlineField>
+                        {p.legs.map((leg, i) => {
+                            const legOriginMissing = !leg.origin?.trim();
+                            const legDestMissing = !leg.destination?.trim();
+                            const legSameAirport = !!leg.origin && !!leg.destination && leg.origin.trim().toUpperCase() === leg.destination.trim().toUpperCase();
+                            const legDateMissing = !leg.date?.trim();
 
-                                <ArrowLeftRight className="w-3.5 h-3.5 text-[#CBD5E1] shrink-0" />
+                            return (
+                                <div key={i} className="flex items-center gap-4 flex-wrap py-2 border-b border-slate-100 last:border-0">
+                                    <InlineField
+                                        label={`${t.from} ${i + 1}`}
+                                        className="w-32"
+                                        required
+                                        error={attemptedSubmit && (legOriginMissing ? t.originRequired : legSameAirport ? t.sameAirportError : undefined)}
+                                    >
+                                        <AirportInput
+                                            value={leg.origin}
+                                            selectedAirport={leg.originAirport ?? null}
+                                            onChange={(code, a) => updateLeg(i, { origin: code, originAirport: a ?? null })}
+                                            placeholder={t.fromPlaceholder}
+                                        />
+                                    </InlineField>
 
-                                <InlineField label={`Destination ${i + 1}`} className="w-32">
-                                    <AirportInput
-                                        value={leg.destination}
-                                        selectedAirport={leg.destinationAirport ?? null}
-                                        onChange={(code, a) => updateLeg(i, { destination: code, destinationAirport: a ?? null })}
-                                        placeholder="Où ?"
-                                    />
-                                </InlineField>
+                                    <ArrowLeftRight className="w-3.5 h-3.5 text-[#CBD5E1] shrink-0" />
 
-                                <div className="w-36">
-                                    <DateField
-                                        label={`Date ${i + 1}`}
-                                        value={leg.date}
-                                        onChange={(v) => updateLeg(i, { date: v })}
-                                        minDate={i > 0 ? p.legs[i - 1].date : undefined}
-                                    />
-                                </div>
+                                    <InlineField
+                                        label={`${t.to} ${i + 1}`}
+                                        className="w-32"
+                                        required
+                                        error={attemptedSubmit && (legDestMissing ? t.destRequired : legSameAirport ? t.sameAirportError : undefined)}
+                                    >
+                                        <AirportInput
+                                            value={leg.destination}
+                                            selectedAirport={leg.destinationAirport ?? null}
+                                            onChange={(code, a) => updateLeg(i, { destination: code, destinationAirport: a ?? null })}
+                                            placeholder={t.toPlaceholder}
+                                        />
+                                    </InlineField>
 
-                                {i === 0 ? (
-                                    <div className="ml-auto">
-                                        <PassengerClassSelector
-                                            qteADT={p.qteADT} qteCHD={p.qteCHD} qteINF={p.qteINF} classe={p.classe}
-                                            onChange={(n) => update(n)}
-                                            trigger={
-                                                <InlineField label="Passagers / Classe" onClick={() => {}} className="cursor-pointer">
-                                                    <div className="flex items-center gap-1.5">
-                                                        <Users className="w-3.5 h-3.5 text-[#94A3B8]" />
-                                                        <span className="font-bold text-[#0B0F2E] text-sm whitespace-nowrap">
-                                                            {count} passager{count > 1 ? 's' : ''}
-                                                        </span>
-                                                    </div>
-                                                    <div className="text-[11px] text-[#3D8BF0] mt-0.5">{classe}</div>
-                                                </InlineField>
-                                            }
+                                    <div className="w-36">
+                                        <DateField
+                                            label={`${t.date} ${i + 1}`}
+                                            value={leg.date}
+                                            onChange={(v) => updateLeg(i, { date: v })}
+                                            minDate={i > 0 ? p.legs[i - 1].date : undefined}
+                                            required
+                                            error={attemptedSubmit && (legDateMissing ? t.departDateRequired : undefined)}
                                         />
                                     </div>
-                                ) : (
-                                    <button
-                                        type="button"
-                                        onClick={() => removeLeg(i)}
-                                        className="ml-auto w-7 h-7 rounded-full bg-red-50 border border-red-100 text-red-400 hover:bg-red-100 flex items-center justify-center shrink-0"
-                                        aria-label="Supprimer cette destination"
-                                    >
-                                        <X className="w-3.5 h-3.5" />
-                                    </button>
-                                )}
-                            </div>
-                        ))}
+
+                                    {i === 0 ? (
+                                        <div className="ml-auto">
+                                            <PassengerClassSelector
+                                                qteADT={p.qteADT} qteCHD={p.qteCHD} qteINF={p.qteINF} classe={p.classe}
+                                                onChange={(n) => update(n)}
+                                                trigger={
+                                                    <InlineField label={t.passengersClass} onClick={() => {}} className="cursor-pointer">
+                                                        <div className="flex items-center gap-1.5">
+                                                            <Users className="w-3.5 h-3.5 text-[#94A3B8]" />
+                                                            <span className="font-bold text-[#0B0F2E] text-sm whitespace-nowrap">
+                                                                {count} {count > 1 ? t.passengersPlural : t.passengers}
+                                                            </span>
+                                                        </div>
+                                                        <div className="text-[11px] text-[#3D8BF0] mt-0.5">{classe}</div>
+                                                    </InlineField>
+                                                }
+                                            />
+                                        </div>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            onClick={() => removeLeg(i)}
+                                            className="ml-auto w-7 h-7 rounded-full bg-red-50 border border-red-100 text-red-400 hover:bg-red-100 flex items-center justify-center shrink-0 cursor-pointer"
+                                            aria-label="Supprimer cette destination"
+                                        >
+                                            <X className="w-3.5 h-3.5" />
+                                        </button>
+                                    )}
+                                </div>
+                            );
+                        })}
 
                         <div className="flex items-center justify-between pt-1">
                             {p.legs.length < 6 && (
                                 <button
                                     type="button"
                                     onClick={addLeg}
-                                    className="text-[#F5A623] text-xs flex items-center gap-1 hover:underline font-medium"
+                                    className="text-[#F5A623] text-xs flex items-center gap-1 hover:underline font-medium cursor-pointer"
                                 >
-                                    <Plus className="w-3.5 h-3.5" /> Ajouter un vol
+                                    <Plus className="w-3.5 h-3.5" /> {t.addFlight}
                                 </button>
                             )}
                             <Button
                                 type="submit"
-                                disabled={loading || !!passengerError || multiCityIncomplete}
-                                className="h-9 px-5 bg-[#FFAA01] hover:bg-[#E09515] text-[#0B0F2E] font-bold text-sm rounded-lg"
+                                disabled={loading}
+                                className="h-9 px-5 bg-[#FFAA01] hover:bg-[#E09515] text-[#0B0F2E] font-bold text-sm rounded-lg cursor-pointer"
                             >
                                 <Search className="w-3.5 h-3.5 mr-1.5" />
-                                {loading ? 'Recherche...' : 'Rechercher un vol'}
+                                {loading ? t.searching : t.search}
                             </Button>
                         </div>
                     </div>
                 ) : (
-                    <div className="flex items-center gap-4 flex-wrap">
-                        <InlineField label="De" className="w-32">
-                            <AirportInput
-                                value={p.departVol1}
-                                selectedAirport={depAirport}
-                                onChange={(code, a) => {
-                                    update({ departVol1: code });
-                                    setDepAirport(a ?? null);
-                                    if (a) {
-                                        setTimeout(() => destInputRef.current?.focus(), 0);
-                                    }
-                                }}
-                                placeholder="D'où ?"
-                                onShowAllDestinations={() => { setDestinationPickerTarget('origin'); setShowAllDestinations(true); }}
-                            />
-                        </InlineField>
-
-                        <button type="button" onClick={swap} aria-label="Inverser"
-                                className="w-7 h-7 rounded-full bg-[#F1F5F9] border border-[#0454E8] hover:bg-[#F5A623] hover:text-white hover:rotate-180 transition-all duration-300 flex items-center justify-center text-[#64748B] shrink-0">
-                            <ArrowLeftRight className="w-3 h-3" />
-                        </button>
-
-                        <InlineField label="À" className="w-32">
-                            <AirportInput
-                                ref={destInputRef}
-                                value={p.destinationVol1}
-                                selectedAirport={destAirport}
-                                onChange={(code, a) => {
-                                    update({ destinationVol1: code });
-                                    setDestAirport(a ?? null);
-                                    if (a) {
-                                        setDateOpen(true);
-                                    }
-                                }}
-                                placeholder="Où ?"
-                                onShowAllDestinations={() => { setDestinationPickerTarget('destination'); setShowAllDestinations(true); }}
-                            />
-                            {p.destinationVol1 && !isDestinationSupported(p.destinationVol1) && (
-                                <div className="text-[10px] text-amber-600 mt-1 whitespace-nowrap">
-                                    Non disponible
-                                </div>
-                            )}
-                        </InlineField>
-
-                        <div className="w-px h-9 bg-dashed border-l border-dashed border-[#3D8BF0]/40 shrink-0" />
-
-                        <DateRangeTrigger
-                            tripType={p.tripType}
-                            startDate={p.departleVol1}
-                            endDate={p.retourleVol1}
-                            open={dateOpen}
-                            onOpenChange={setDateOpen}
-                            onChangeStart={(v) => {
-                                const patch: Partial<FormState> = { departleVol1: v };
-                                if (p.tripType === 'roundtrip' && p.retourleVol1 && p.retourleVol1 < v) {
-                                    patch.retourleVol1 = '';
-                                }
-                                update(patch);
-                            }}
-                            onChangeEnd={(v) => update({ retourleVol1: v })}
-                        />
-
-                        <div className="w-px h-9 bg-dashed border-l border-dashed border-[#3D8BF0]/40 shrink-0" />
-
-                        <div>
-                            <div className="text-[10px] uppercase tracking-wide text-[#94A3B8] font-medium mb-0.5">
-                                Passagers / Classe
+                    <>
+                        {attemptedSubmit && sameAirport && (
+                            <div className="w-full text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-1.5 font-medium mb-2">
+                                {t.sameAirportError}
                             </div>
-                            <div className="[&>button]:!border-none [&>button]:!bg-transparent [&>button]:!px-0 [&>button]:!h-auto [&>button]:!shadow-none hover:[&>button]:!bg-transparent">
-                                <PassengerClassSelector
-                                    qteADT={p.qteADT} qteCHD={p.qteCHD} qteINF={p.qteINF} classe={p.classe}
-                                    onChange={(n) => update(n)}
+                        )}
+                        <div className="flex items-center gap-4 flex-wrap">
+                            <InlineField
+                                label={t.from}
+                                className="w-32"
+                                required
+                                error={attemptedSubmit && (originMissing ? t.originRequired : sameAirport ? t.sameAirportError : undefined)}
+                            >
+                                <AirportInput
+                                    value={p.departVol1}
+                                    selectedAirport={depAirport}
+                                    onChange={(code, a) => {
+                                        update({ departVol1: code });
+                                        setDepAirport(a ?? null);
+                                        if (a) {
+                                            setTimeout(() => destInputRef.current?.focus(), 0);
+                                        }
+                                    }}
+                                    placeholder={t.fromPlaceholder}
+                                    onShowAllDestinations={() => { setDestinationPickerTarget('origin'); setShowAllDestinations(true); }}
                                 />
+                            </InlineField>
+
+                            <button type="button" onClick={swap} aria-label="Inverser"
+                                    className="w-7 h-7 rounded-full bg-[#F1F5F9] border border-[#0454E8] hover:bg-[#F5A623] hover:text-white hover:rotate-180 transition-all duration-300 flex items-center justify-center text-[#64748B] shrink-0 cursor-pointer">
+                                <ArrowLeftRight className="w-3 h-3" />
+                            </button>
+
+                            <InlineField
+                                label={t.to}
+                                className="w-32"
+                                required
+                                error={attemptedSubmit && (destMissing ? t.destRequired : sameAirport ? t.sameAirportError : undefined)}
+                            >
+                                <AirportInput
+                                    ref={destInputRef}
+                                    value={p.destinationVol1}
+                                    selectedAirport={destAirport}
+                                    onChange={(code, a) => {
+                                        update({ destinationVol1: code });
+                                        setDestAirport(a ?? null);
+                                        if (a) {
+                                            setDateOpen(true);
+                                        }
+                                    }}
+                                    placeholder={t.toPlaceholder}
+                                    onShowAllDestinations={() => { setDestinationPickerTarget('destination'); setShowAllDestinations(true); }}
+                                />
+                                {p.destinationVol1 && !isDestinationSupported(p.destinationVol1) && (
+                                    <div className="text-[10px] text-amber-600 mt-1 whitespace-nowrap">
+                                        {t.notAvailable}
+                                    </div>
+                                )}
+                            </InlineField>
+
+                            <div className="w-px h-9 bg-dashed border-l border-dashed border-[#3D8BF0]/40 shrink-0" />
+
+                            <DateRangeTrigger
+                                tripType={p.tripType}
+                                startDate={p.departleVol1}
+                                endDate={p.retourleVol1}
+                                open={dateOpen}
+                                onOpenChange={setDateOpen}
+                                departLabel={t.from}
+                                returnLabel={t.returnDate}
+                                departRequired
+                                returnRequired={p.tripType === 'roundtrip'}
+                                departError={attemptedSubmit && (departDateMissing ? t.departDateRequired : undefined)}
+                                returnError={attemptedSubmit && (returnDateMissing ? t.returnDateRequired : undefined)}
+                                onChangeStart={(v) => {
+                                    const patch: Partial<FormState> = { departleVol1: v };
+                                    if (p.tripType === 'roundtrip' && p.retourleVol1 && p.retourleVol1 < v) {
+                                        patch.retourleVol1 = '';
+                                    }
+                                    update(patch);
+                                }}
+                                onChangeEnd={(v) => update({ retourleVol1: v })}
+                            />
+
+                            <div className="w-px h-9 bg-dashed border-l border-dashed border-[#3D8BF0]/40 shrink-0" />
+
+                            <div>
+                                <div className="text-[10px] uppercase tracking-wide text-[#94A3B8] font-medium mb-0.5">
+                                    {t.passengersClass}
+                                </div>
+                                <div className="[&>button]:!border-none [&>button]:!bg-transparent [&>button]:!px-0 [&>button]:!h-auto [&>button]:!shadow-none hover:[&>button]:!bg-transparent">
+                                    <PassengerClassSelector
+                                        qteADT={p.qteADT} qteCHD={p.qteCHD} qteINF={p.qteINF} classe={p.classe}
+                                        onChange={(n) => update(n)}
+                                    />
+                                </div>
                             </div>
+
+                            <Button
+                                type="submit"
+                                disabled={loading}
+                                className="ml-auto h-10 px-6 bg-[#FEC425] hover:bg-[#E09515] text-[#3566E3] font-bold text-sm rounded-lg shrink-0 cursor-pointer"
+                            >
+                                <Search className="w-3.5 h-3.5 mr-1.5" />
+                                {loading ? t.searching : t.search}
+                            </Button>
                         </div>
-
-                        <Button
-                            type="submit"
-                            disabled={loading || !!passengerError || returnDateMissing}
-                            className="ml-auto h-10 px-6 bg-[#FEC425] hover:bg-[#E09515] text-[#3566E3] font-bold text-sm rounded-lg shrink-0"
-                        >
-                            <Search className="w-3.5 h-3.5 mr-1.5" />
-                            {loading ? 'Recherche...' : 'Rechercher un vol'}
-                        </Button>
-
-
-                    </div>
+                    </>
                 )}
 
                 {passengerError && (

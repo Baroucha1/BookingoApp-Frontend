@@ -4,7 +4,7 @@ import { join, extname, basename } from 'path';
 
 // launch Script using:  node convert-webp.js
 
-const dir = './public/assets/airlines';
+const dir = './public/visa';
 
 const files = readdirSync(dir).filter((f) => extname(f).toLowerCase() === '.png');
 

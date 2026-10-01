@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Eye, EyeOff, ArrowRight, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, ArrowLeft, ArrowRight, Loader2 } from 'lucide-react';
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -66,7 +66,17 @@ const ResetPasswordForm = () => {
     }
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 px-5">
+        <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 px-5 py-8">
+            <div className="w-full max-w-md mb-4 flex justify-start">
+                <button
+                    type="button"
+                    onClick={() => window.history.length > 1 ? navigate(-1) : navigate('/login')}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-gray-200 text-gray-700 hover:text-[#0865FE] hover:border-[#0865FE]/30 font-semibold text-xs shadow-xs hover:shadow-sm transition-all cursor-pointer"
+                >
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    <span>Retour à la connexion</span>
+                </button>
+            </div>
             <div className="w-full max-w-md bg-white rounded-xl shadow-xl p-6">
                 {done ? (
                     <div className="text-center space-y-4">

@@ -3,7 +3,7 @@ import { useAuth } from '@/hooks/useAuth';
 import {
   LayoutDashboard, Globe, FileText, LogOut, Menu, X, MapPin,
   CreditCard, Users, Plane, ChevronRight, ChevronDown, User as UserIcon, Settings,
-  Wifi, Bed, Bell, Tag, Percent, Receipt, Layers, RefreshCw, Wrench, Mail, BedDouble,
+  Wifi, Bed, Bell, Tag, Percent, Receipt, Layers, RefreshCw, Wrench, Mail,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -48,6 +48,7 @@ const productGroups: NavGroup[] = [
       { to: '/admin/flight-bookings',     icon: Plane,   label: 'Flights Bookings' },
       { to: '/admin/flight-service-fees', icon: Receipt, label: 'Frais de service' },
       { to: '/admin/flight-acd-fees',     icon: Tag,     label: 'Frais ACD Zone A' },
+      { to: '/admin/flight-commissions',  icon: Percent, label: 'Commissions' },
       { to: '/admin/flight-promo-codes',  icon: Tag,     label: 'Codes Promos' },
     ],
   },
@@ -58,7 +59,6 @@ const productGroups: NavGroup[] = [
     defaultOpen: false,
     children: [
       { to: '/admin/hotels/test', icon: Wrench, label: 'Test API' },
-      { to: '/admin/hotels/bookings', icon: BedDouble, label: 'Réservations' },
     ],
   },
   {
@@ -99,6 +99,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/admin/flight-bookings':      'Flights Bookings',
   '/admin/flight-service-fees':  'Frais de service',
   '/admin/flight-acd-fees':      'Frais ACD Zone A',
+  '/admin/flight-commissions':   'Commissions',
   '/admin/flight-promo-codes':   'Codes Promos',
   '/admin/fournisseurs':   'Fournisseurs',
   '/admin/exchange-rates': 'Taux de change',
@@ -233,10 +234,10 @@ const AdminLayout = () => {
             }`}
         >
           {/* Branding — solid blue, same color + height as the top navbar */}
-          <div className={cn(HEADER_HEIGHT, 'px-5 flex items-center bg-[#1775FF] shrink-0 pt-safe h-[calc(3.5rem+env(safe-area-inset-top,0px))] lg:h-14 lg:pt-0')}>
+          <div className={cn(HEADER_HEIGHT, 'px-5 flex items-center bg-[#1775FF] shrink-0')}>
             <Link to="/" className="flex items-center">
               <img
-                  src="/newlogo.png"
+                  src="/bookingo-logo.png"
                   alt="BookinGO"
                   style={{ width: '130px', height: 'auto' }}
                   className="brightness-0 invert"
@@ -289,7 +290,7 @@ const AdminLayout = () => {
           </DropdownMenu>
 
           {/* Nav — white background, distinct from the blue header/photo card above */}
-          <nav className="flex-1 p-3 space-y-1 overflow-y-auto bg-white pb-[calc(1rem+env(safe-area-inset-bottom,0px))] lg:pb-3">
+          <nav className="flex-1 p-3 space-y-1 overflow-y-auto bg-white">
             {rootTop.map((item) => renderLeaf(item))}
 
             <div className="pt-4 pb-1 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">
@@ -309,7 +310,7 @@ const AdminLayout = () => {
 
         {/* Main */}
         <div className="flex-1 flex flex-col min-w-0">
-          <header className={cn(HEADER_HEIGHT, 'bg-[#1775FF] flex items-center px-4 md:px-6 gap-3 sticky top-0 z-30 shrink-0 pt-safe h-[calc(3.5rem+env(safe-area-inset-top,0px))] md:h-14 md:pt-0')}>
+          <header className={cn(HEADER_HEIGHT, 'bg-[#1775FF] flex items-center px-4 md:px-6 gap-3 sticky top-0 z-30 shrink-0')}>
             <Button variant="ghost" size="icon" className="lg:hidden text-white hover:bg-white/10 hover:text-white" onClick={() => setSidebarOpen(!sidebarOpen)}>
               {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </Button>
@@ -331,7 +332,7 @@ const AdminLayout = () => {
               </div>
             </div>
           </header>
-          <main className="flex-1 p-4 md:p-6 overflow-auto pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] md:pb-6">
+          <main className="flex-1 p-4 md:p-6 overflow-auto">
             <Outlet />
           </main>
         </div>

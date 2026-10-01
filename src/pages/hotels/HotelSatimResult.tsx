@@ -1,68 +1,100 @@
 // src/pages/hotels/HotelSatimResult.tsx
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
+import { CheckCircle2, XCircle, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { confirmHotelPayment, type ConfirmHotelPaymentResult } from '@/service/hotels/hotels.service';
+import AppLoading from '@/components/common/AppLoading';
+import { useLanguage } from '@/i18n/LanguageContext';
+import {
+    confirmHotelPayment,
+    type ConfirmHotelPaymentResult,
+    type PendingVerification,
+} from '@/service/hotels/hotels.service';
 
 export default function HotelSatimResult() {
+    const { t } = useLanguage();
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
-    const [result, setResult] = useState<ConfirmHotelPaymentResult | null>(null);
+    const [result, setResult] = useState<ConfirmHotelPaymentResult | PendingVerification | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const hasConfirmed = useRef(false);
 
     useEffect(() => {
-        const bookingId = searchParams.get('bookingId');
-        // SATIM appends its own order identifier to the return URL — the exact
-        // param name depends on your gateway config (commonly `orderId` or
-        // `mdOrder`). Checking both covers either case.
-        const orderId = searchParams.get('orderId') ?? searchParams.get('mdOrder');
+        const bookingToken =
+            searchParams.get('bookingToken') ??
+            searchParams.get('token') ??
+            searchParams.get('bookingId') ??
+            sessionStorage.getItem('hotel_satim_last_token');
 
-        if (!bookingId || !orderId) {
-            setError('Paramètres de paiement manquants.');
+        const orderId =
+            searchParams.get('orderId') ??
+            searchParams.get('mdOrder') ??
+            (bookingToken ? sessionStorage.getItem(`hotel_satim_orderId_${bookingToken}`) : null);
+
+        if (!bookingToken || !orderId) {
+            setError(t('hotelPaymentMissingParams'));
             setLoading(false);
             return;
         }
 
-        confirmHotelPayment({ hotelBookingId: bookingId, orderId })
+        if (hasConfirmed.current) return;
+        hasConfirmed.current = true;
+
+        confirmHotelPayment({ bookingToken, orderId })
             .then(setResult)
-            .catch((err) => setError(err instanceof Error ? err.message : 'Échec de la confirmation du paiement'))
+            .catch((err) => setError(err instanceof Error ? err.message : t('hotelPaymentConfirmFailed')))
             .finally(() => setLoading(false));
-    }, [searchParams]);
+    }, [searchParams, t]);
+
+    if (loading) {
+        return (
+            <AppLoading
+                message={t('hotelPaymentConfirming')}
+                subMessage={t('hotelPaymentVerifyingSatim')}
+            />
+        );
+    }
 
     return (
         <div className="min-h-screen bg-[#F0F6FF] flex items-center justify-center p-6">
-            <div className="max-w-md w-full bg-white rounded-xl border border-slate-100 p-8 text-center space-y-4">
-                {loading && (
-                    <>
-                        <Loader2 className="w-10 h-10 animate-spin text-[#1775FF] mx-auto" />
-                        <div className="text-slate-600">Confirmation du paiement en cours...</div>
-                    </>
-                )}
+            <div className="max-w-md w-full bg-white rounded-xl border border-slate-100 p-8 text-center space-y-4 shadow-sm">
 
                 {!loading && error && (
                     <>
                         <XCircle className="w-12 h-12 text-red-500 mx-auto" />
-                        <div className="font-bold text-red-600 text-lg">Échec du paiement</div>
+                        <div className="font-bold text-red-600 text-lg">{t('hotelPaymentFailed')}</div>
                         <p className="text-sm text-slate-500">{error}</p>
-                        <Button onClick={() => navigate('/hotels')} className="mt-4 bg-[#1775FF] hover:bg-[#1775FF]/90 text-white">
-                            Retour à la recherche
+                        <Button onClick={() => navigate('/hotels')} className="mt-4 bg-[#1775FF] hover:bg-[#1775FF]/90 text-white cursor-pointer">
+                            {t('hotelReturnToHotels')}
                         </Button>
                     </>
                 )}
 
                 {!loading && !error && result && (
                     <>
-                        <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto" />
-                        <div className="font-bold text-emerald-600 text-lg">Paiement confirmé</div>
-                        <div className="text-sm text-slate-600 space-y-1">
-                            <div>{result.satimDetails.amount} {result.satimDetails.currency}</div>
-                            <div className="text-xs font-mono text-slate-400">Réf: {result.satimDetails.orderNumber}</div>
-                        </div>
-                        <Button onClick={() => navigate('/hotels/my-bookings')} className="mt-4 bg-[#1775FF] hover:bg-[#1775FF]/90 text-white">
-                            Voir mes réservations
-                        </Button>
+                        {result.status === 'pending_verification' ? (
+                            <>
+                                <Clock className="w-12 h-12 text-amber-500 mx-auto" />
+                                <div className="font-bold text-amber-600 text-lg">{t('hotelPaymentPending')}</div>
+                                <p className="text-sm text-slate-600">{result.message}</p>
+                                <Button onClick={() => navigate('/hotels')} className="mt-4 bg-[#1775FF] hover:bg-[#1775FF]/90 text-white cursor-pointer">
+                                    {t('hotelReturnToHotels')}
+                                </Button>
+                            </>
+                        ) : (
+                            <>
+                                <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto" />
+                                <div className="font-bold text-emerald-600 text-lg">{t('hotelPaymentConfirmed')}</div>
+                                <div className="text-sm text-slate-600 space-y-1">
+                                    <div>{result.satimDetails.amount} {result.satimDetails.currency}</div>
+                                    <div className="text-xs font-mono text-slate-400">{t('hotelPaymentRef')}: {result.satimDetails.orderNumber}</div>
+                                </div>
+                                <Button onClick={() => navigate('/hotels')} className="mt-4 bg-[#1775FF] hover:bg-[#1775FF]/90 text-white cursor-pointer">
+                                    {t('hotelReturnToHotels')}
+                                </Button>
+                            </>
+                        )}
                     </>
                 )}
             </div>

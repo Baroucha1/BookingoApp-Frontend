@@ -4,6 +4,7 @@ import { QRCodeSVG }               from 'qrcode.react';
 import { CheckCircle, XCircle, Copy, Wifi, ArrowLeft } from 'lucide-react';
 import { getEsimPaymentStatus, formatBytes, type Esim } from '@/service/esim.service';
 import { toast } from 'sonner';
+import AppLoading from '@/components/common/AppLoading';
 
 const EsimCard = ({ esim }: { esim: Esim }) => {
     const copy = (text: string, label: string) => {
@@ -62,12 +63,7 @@ const EsimStatus = () => {
     const isSuccess = data?.status === 'success';
 
     if (isLoading) return (
-        <div className="min-h-screen bg-gray-50 pt-16 flex items-center justify-center">
-            <div className="text-center">
-                <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                <p className="text-gray-600">Vérification de votre commande...</p>
-            </div>
-        </div>
+        <AppLoading message="Vérification de votre commande eSIM..." />
     );
 
     if (isError) return (

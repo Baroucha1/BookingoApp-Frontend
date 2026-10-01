@@ -4,6 +4,7 @@ import { ArrowLeft, Loader2, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { getCustomPayment, initiateCustomSatimPayment, type CustomPayment } from '@/service/payment.service';
+import AppLoading from '@/components/common/AppLoading';
 
 export default function CustomPaymentPay() {
     const { id } = useParams<{ id: string }>();
@@ -77,7 +78,7 @@ export default function CustomPaymentPay() {
     };
 
     if (loading) {
-        return <div className="max-w-xl mx-auto py-24 text-center text-muted-foreground">Chargement...</div>;
+        return <AppLoading message="Chargement de votre dossier de paiement..." />;
     }
 
     if (!payment) {
@@ -92,10 +93,11 @@ export default function CustomPaymentPay() {
     return (
         <div className="max-w-xl mx-auto py-12 px-4 space-y-6">
             <button
-                onClick={() => navigate('/client/custom-payments')}
-                className="text-muted-foreground hover:text-primary flex items-center gap-2 text-sm transition-colors font-medium"
+                onClick={() => window.history.length > 1 ? navigate(-1) : navigate('/client/custom-payments')}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-gray-200 text-gray-700 hover:text-[#0865FE] hover:border-[#0865FE]/30 font-semibold text-xs shadow-xs hover:shadow-sm transition-all cursor-pointer"
             >
-                <ArrowLeft className="w-4 h-4" /> Retour
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Retour aux paiements</span>
             </button>
 
             <div className="p-6 rounded-2xl bg-white shadow-sm border space-y-4">

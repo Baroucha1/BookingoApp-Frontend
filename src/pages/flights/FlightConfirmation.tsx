@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Loader2, AlertTriangle, XCircle } from 'lucide-react';
+import { AlertTriangle, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import AppLoading from '@/components/common/AppLoading';
 import BookingStepper from '@/components/flights/BookingStepper';
 import ConfirmationCard from '@/components/flights/ConfirmationCard';
 import { getBookingStatus, BookingStatusResponse } from '@/service/flights/bookingStatus.service';
@@ -48,10 +49,12 @@ export default function FlightConfirmation() {
         <BookingStepper current={4} />
 
         {ui === 'POLLING' && (
-          <div className="p-8 rounded-2xl bg-white/[0.04] border border-white/10 text-center space-y-4 animate-fade-in">
-            <Loader2 className="w-10 h-10 text-[#F5A623] animate-spin mx-auto" />
-            <h2 className="text-xl font-semibold text-white">Vérification du paiement en cours...</h2>
-            <p className="text-white/60 text-sm">Merci de patienter, cela peut prendre quelques instants.</p>
+          <div className="p-8 rounded-2xl bg-white/[0.04] border border-white/10 text-center animate-fade-in">
+            <AppLoading
+              fullScreen={false}
+              message="Vérification du paiement en cours..."
+              subMessage="Merci de patienter, cela peut prendre quelques instants."
+            />
           </div>
         )}
 

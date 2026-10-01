@@ -9,9 +9,15 @@ import AppDownloadPromo from '@/components/home/AppDownloadPromo';
 import { Sparkles } from 'lucide-react';
 import { useLanguage } from '@/i18n/LanguageContext';
 
+const teaserText = {
+    fr: "Nos meilleures offres arrivent bientôt !",
+    en: "Our best offers are coming soon!",
+    ar: "أفضل عروضنا قادمة قريباً!",
+};
+
 const HomePage = () => {
+    const { language } = useLanguage();
     const location = useLocation();
-    const { t } = useLanguage();
 
     useEffect(() => {
         if (!location.hash) return;
@@ -25,10 +31,9 @@ const HomePage = () => {
     }, [location]);
 
     return (
-        <div className="min-h-screen bg-[#DFECFF]">
+        <div className="min-h-screen bg-transparent">
             <Hero />
             <ServiceCards />
-            <NewsletterBanner />
 
             {/* Offres du moment — suspendu */}
             <div id="offres" className="relative">
@@ -36,12 +41,12 @@ const HomePage = () => {
                     <OffresDuMoment />
                 </div>
                 <div className="absolute inset-0 flex items-center justify-center px-6">
-                    <div className="bg-white/90 backdrop-blur-sm border border-amber-200 rounded-2xl px-8 py-6 shadow-lg flex items-center gap-4 max-w-md text-center sm:text-left sm:flex-row flex-col">
+                    <div className="bg-white/90 backdrop-blur-sm border border-amber-200 rounded-2xl px-8 py-6 shadow-lg flex items-center gap-4 max-w-md text-center sm:text-left rtl:sm:text-right sm:flex-row flex-col">
                         <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
                             <Sparkles className="w-6 h-6 text-amber-500" />
                         </div>
                         <p className="font-semibold text-gray-800 text-lg">
-                            {t('homeOffersSoon')}
+                            {teaserText[language] || teaserText.fr}
                         </p>
                     </div>
                 </div>

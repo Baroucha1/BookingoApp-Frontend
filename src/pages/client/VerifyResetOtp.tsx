@@ -1,13 +1,11 @@
 import { useState, useRef, useEffect, type ClipboardEvent, type KeyboardEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowRight, Loader2 } from 'lucide-react';
-import { useLanguage } from '@/i18n/LanguageContext';
+import { ArrowLeft, ArrowRight, Loader2 } from 'lucide-react';
 
 const API = import.meta.env.VITE_API_URL;
 
 const VerifyResetOtp = () => {
     const navigate = useNavigate();
-    const { t } = useLanguage();
     const [searchParams] = useSearchParams();
     const email = searchParams.get('email') || '';
 
@@ -52,7 +50,7 @@ const VerifyResetOtp = () => {
             });
             const data = await res.json();
             if (!res.ok) {
-                setError(t('otpInvalid'));
+                setError(data.message ?? 'Code invalide.');
                 setDigits(Array(6).fill(''));
                 inputs.current[0]?.focus();
                 return;
@@ -83,24 +81,34 @@ const VerifyResetOtp = () => {
     if (!email) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50 px-5">
-            <div className="w-full max-w-md bg-white rounded-xl shadow-xl p-6 text-center space-y-4">
-            <p className="text-sm text-gray-500">{t('resetEmailMissing')}</p>
-        <button onClick={() => navigate('/forgot-password')} className="font-semibold" style={{ color: '#0865FE' }}>
-        {t('restartPasswordReset')}
-        </button>
-        </div>
-        </div>
-    );
+                <div className="w-full max-w-md bg-white rounded-xl shadow-xl p-6 text-center space-y-4">
+                    <p className="text-sm text-gray-500">Aucune adresse email fournie.</p>
+                    <button onClick={() => navigate('/forgot-password')} className="font-semibold" style={{ color: '#0865FE' }}>
+                        Recommencer la procédure
+                    </button>
+                </div>
+            </div>
+        );
     }
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 px-5">
-        <div className="w-full max-w-md bg-white rounded-xl shadow-xl p-6 space-y-6 text-center">
+        <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 px-5 py-8">
+            <div className="w-full max-w-md mb-4 flex justify-start">
+                <button
+                    type="button"
+                    onClick={() => window.history.length > 1 ? navigate(-1) : navigate('/forgot-password')}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-gray-200 text-gray-700 hover:text-[#0865FE] hover:border-[#0865FE]/30 font-semibold text-xs shadow-xs hover:shadow-sm transition-all cursor-pointer"
+                >
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    <span>Retour</span>
+                </button>
+            </div>
+            <div className="w-full max-w-md bg-white rounded-xl shadow-xl p-6 space-y-6 text-center">
         <div className="text-5xl">🔑</div>
     <div>
-    <h1 className="text-2xl font-bold text-gray-900">{t('enterResetCode')}</h1>
+    <h1 className="text-2xl font-bold text-gray-900">Entrez le code</h1>
     <p className="text-sm text-gray-500 mt-2">
-        {t('otpSent')}<br />
+        Un code à 6 chiffres a été envoyé à<br />
     <span className="font-semibold text-gray-700">{email}</span>
         </p>
         </div>
@@ -131,19 +139,15 @@ const VerifyResetOtp = () => {
         className="w-full h-12 rounded-xl flex items-center justify-center gap-2 text-sm font-bold text-white disabled:opacity-50 transition-all"
         style={{ background: '#0865FE' }}
     >
-        {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> {t('otpVerifying')}</> : <><ArrowRight className="w-4 h-4" /> {t('otpConfirm')}</>}
+        {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Vérification...</> : <><ArrowRight className="w-4 h-4" /> Confirmer</>}
         </button>
 
         <p className="text-sm text-gray-500">
-            {t('noOtpReceived')}{' '}
+            Vous n'avez pas reçu de code ?{' '}
             {wait > 0
-                ? <span className="text-gray-400">{t('resendIn')} {wait}s</span>
-            : <button onClick={handleResend} className="font-semibold" style={{ color: '#0865FE' }}>{t('resend')}</button>}
+                ? <span className="text-gray-400">Renvoyer dans {wait}s</span>
+            : <button onClick={handleResend} className="font-semibold" style={{ color: '#0865FE' }}>Renvoyer</button>}
             </p>
-
-            <button onClick={() => navigate('/login')} className="text-xs text-gray-400 hover:text-gray-600 transition-colors">
-            {t('backToLogin')}
-            </button>
             </div>
             </div>
             );

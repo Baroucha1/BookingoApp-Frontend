@@ -32,7 +32,7 @@ export default function MobileFilterSheet({ open, title, onClose, onReset, onApp
 
                 <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
 
-                <div className="flex items-center gap-3 px-5 py-4 border-t border-slate-100 shrink-0 pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
+                <div className="flex items-center gap-3 px-5 py-4 border-t border-slate-100 shrink-0 pb-[max(1rem,env(safe-area-inset-bottom))]">
                     <button
                         type="button"
                         onClick={onReset}

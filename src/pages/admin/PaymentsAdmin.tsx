@@ -295,8 +295,8 @@ const PaymentsAdmin = () => {
                       <div><span className="text-muted-foreground">Référence:</span> <span className="font-mono">{ref(selected)}</span></div>
                       <div><span className="text-muted-foreground">Montant:</span> <strong>{Number(selected.amount).toLocaleString('fr-FR')} {selected.currency?.toUpperCase()}</strong></div>
                       <div><span className="text-muted-foreground">Méthode:</span> {METHOD_LABEL[selected.method] ?? selected.method}</div>
-                      <div><span className="text-muted-foreground">Créé le:</span> {new Date(selected.createdAt).toLocaleString('fr-FR')}</div>
-                      <div><span className="text-muted-foreground">Payé le:</span> {selected.paidAt ? new Date(selected.paidAt).toLocaleString('fr-FR') : '—'}</div>
+                      <div><span className="text-muted-foreground">Créé le:</span> {new Date(selected.createdAt).toLocaleString('fr-FR', { hour12: false })}</div>
+                      <div><span className="text-muted-foreground">Payé le:</span> {selected.paidAt ? new Date(selected.paidAt).toLocaleString('fr-FR', { hour12: false }) : '—'}</div>
                       {selected.satimOrderId && (
                           <div className="col-span-2">
                             <span className="text-muted-foreground">Chargily ID:</span>{' '}

@@ -4,40 +4,38 @@ import {
     Briefcase, Wifi, Stamp, Building2, MoreHorizontal,
     ChevronDown, Mail, Send,
 } from 'lucide-react';
-import { useLanguage } from '@/i18n/LanguageContext';
-import type { TranslationKey } from '@/i18n/translations';
 
 interface FaqCategory {
     id: string;
     icon: React.ComponentType<{ className?: string }>;
-    labelKey: TranslationKey;
+    label: string;
 }
 
 const faqCategories: FaqCategory[] = [
-    { id: 'account', icon: User, labelKey: 'faqCategoryAccount' },
-    { id: 'bookings', icon: Calendar, labelKey: 'faqCategoryBookings' },
-    { id: 'payments', icon: CreditCard, labelKey: 'faqCategoryPayments' },
-    { id: 'cancellation', icon: RotateCcw, labelKey: 'faqCategoryCancellation' },
-    { id: 'flights', icon: Briefcase, labelKey: 'faqCategoryFlights' },
-    { id: 'esim', icon: Wifi, labelKey: 'faqCategoryEsim' },
-    { id: 'visas', icon: Stamp, labelKey: 'faqCategoryVisas' },
-    { id: 'hotels', icon: Building2, labelKey: 'faqCategoryHotels' },
-    { id: 'other', icon: MoreHorizontal, labelKey: 'faqCategoryOther' },
+    { id: 'account', icon: User, label: 'Compte & Inscription' },
+    { id: 'bookings', icon: Calendar, label: 'Reservations' },
+    { id: 'payments', icon: CreditCard, label: 'Paiements' },
+    { id: 'cancellation', icon: RotateCcw, label: 'Annulation & Remboursement' },
+    { id: 'flights', icon: Briefcase, label: 'Vols & Bagages' },
+    { id: 'esim', icon: Wifi, label: 'eSIM' },
+    { id: 'visas', icon: Stamp, label: 'Visas' },
+    { id: 'hotels', icon: Building2, label: 'Hotels' },
+    { id: 'other', icon: MoreHorizontal, label: 'Autres questions' },
 ];
 
 interface FaqEntry {
-    questionKey: TranslationKey;
-    answerKey: TranslationKey;
+    question: string;
+    answer: string;
 }
 
 const faqByCategory: Record<string, FaqEntry[]> = {
     account: [
-        { questionKey: 'faqQuestionCreateAccount', answerKey: 'faqAnswerCreateAccount' },
-        { questionKey: 'faqQuestionBookFlight', answerKey: 'faqAnswerBookFlight' },
-        { questionKey: 'faqQuestionPaymentMethods', answerKey: 'faqAnswerPaymentMethods' },
-        { questionKey: 'faqQuestionChangeBooking', answerKey: 'faqAnswerChangeBooking' },
-        { questionKey: 'faqQuestionConfirmation', answerKey: 'faqAnswerConfirmation' },
-        { questionKey: 'faqQuestionInsurance', answerKey: 'faqAnswerInsurance' },
+        { question: 'Comment creer un compte sur BookinGO ?', answer: "Cliquez sur \"Connexion\" en haut de la page, puis \"Creer un compte\". Renseignez votre email et un mot de passe pour finaliser votre inscription." },
+        { question: 'Comment reserver un billet d\'avion ?', answer: "Rendez-vous sur la page Vols, renseignez votre trajet et vos dates, puis choisissez l'offre qui vous convient et suivez les etapes de paiement." },
+        { question: 'Quels sont les moyens de paiement acceptes ?', answer: "Nous acceptons les cartes CIB, le paiement en especes a la livraison, ainsi que le paiement a la livraison selon les services." },
+        { question: 'Comment modifier ou annuler une reservation ?', answer: "Rendez-vous dans votre espace client, section \"Mes reservations\", puis selectionnez la reservation concernee pour la modifier ou l'annuler." },
+        { question: 'Quand recevrai-je ma confirmation de reservation ?', answer: "La confirmation est envoyee par email immediatement apres validation du paiement." },
+        { question: 'Comment fonctionne l\'assurance voyage ?', answer: "L'assurance voyage peut etre ajoutee lors de la reservation et couvre les annulations, retards et incidents medicaux selon la formule choisie." },
     ],
 };
 
@@ -47,7 +45,6 @@ interface FAQModalProps {
 }
 
 const FAQModal = ({ isOpen, onClose }: FAQModalProps) => {
-    const { t } = useLanguage();
     const [activeCategory, setActiveCategory] = useState('account');
     const [openQuestion, setOpenQuestion] = useState<number | null>(null);
     const [search, setSearch] = useState('');
@@ -70,13 +67,17 @@ const FAQModal = ({ isOpen, onClose }: FAQModalProps) => {
     const entries = faqByCategory[activeCategory] || [];
     const activeCat = faqCategories.find((c) => c.id === activeCategory);
     const filteredEntries = search.trim()
-        ? entries.filter((e) => t(e.questionKey).toLowerCase().includes(search.toLowerCase()))
+        ? entries.filter((e) => e.question.toLowerCase().includes(search.toLowerCase()))
         : entries;
 
     return (
         <div
-            className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto py-10 px-4 pt-[calc(2.5rem+env(safe-area-inset-top,0px))] pb-[calc(2.5rem+env(safe-area-inset-bottom,0px))] px-[max(1rem,env(safe-area-inset-left,0px))]"
-            style={{ background: 'rgba(15, 23, 42, 0.55)' }}
+            className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto px-4"
+            style={{ 
+                background: 'rgba(15, 23, 42, 0.55)',
+                paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1.5rem)',
+                paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1.5rem)',
+            }}
             onClick={onClose}
         >
             <div
@@ -86,7 +87,7 @@ const FAQModal = ({ isOpen, onClose }: FAQModalProps) => {
                 {/* Close button */}
                 <button
                     onClick={onClose}
-                    aria-label={t('flightClose')}
+                    aria-label="Fermer"
                     className="absolute top-5 right-5 w-9 h-9 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors z-10"
                 >
                     <X className="w-5 h-5" />
@@ -101,7 +102,7 @@ const FAQModal = ({ isOpen, onClose }: FAQModalProps) => {
                         <div>
                             <h2 className="text-lg font-bold text-[#0B1E5C]">FAQ</h2>
                             <p className="text-xs text-gray-500 mt-1 leading-relaxed">
-                                {t('faqDialogDescription')}
+                                Trouvez rapidement les reponses a vos questions.
                             </p>
                         </div>
                     </div>
@@ -124,7 +125,7 @@ const FAQModal = ({ isOpen, onClose }: FAQModalProps) => {
                                     }`}
                                 >
                                     <Icon className="w-4 h-4 shrink-0" />
-                                    <span>{t(cat.labelKey)}</span>
+                                    <span>{cat.label}</span>
                                 </button>
                             );
                         })}
@@ -140,14 +141,14 @@ const FAQModal = ({ isOpen, onClose }: FAQModalProps) => {
                                 type="text"
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
-                                placeholder={t('faqSearchPlaceholder')}
+                                placeholder="Rechercher une question..."
                                 className="w-full rounded-xl border border-gray-200 pl-12 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B1E5C]/20 focus:border-[#0B1E5C]"
                             />
                         </div>
 
-                        <h3 className="text-lg font-bold text-[#0B1E5C] mt-6">{t('faqQuestionsTitle')}</h3>
+                        <h3 className="text-lg font-bold text-[#0B1E5C] mt-6">Questions frequentes</h3>
                         <p className="text-sm text-gray-500 mt-1">
-                            {t('faqQuestionsDescription')}
+                            Retrouvez ici les reponses aux questions les plus posees par nos utilisateurs.
                         </p>
                     </div>
 
@@ -155,28 +156,28 @@ const FAQModal = ({ isOpen, onClose }: FAQModalProps) => {
                         <div className="flex flex-col gap-3">
                             {filteredEntries.length === 0 && (
                                 <p className="text-sm text-gray-400 py-6 text-center">
-                                    {t('faqNoMatch')}
+                                    Aucune question ne correspond a votre recherche.
                                 </p>
                             )}
                             {filteredEntries.map((entry, index) => {
                                 const isOpenQ = openQuestion === index;
                                 return (
                                     <div
-                                        key={entry.questionKey}
+                                        key={entry.question}
                                         className="border border-gray-100 rounded-xl overflow-hidden"
                                     >
                                         <button
                                             onClick={() => setOpenQuestion(isOpenQ ? null : index)}
                                             className="w-full flex items-center justify-between gap-3 text-left px-5 py-4 bg-white hover:bg-gray-50 transition-colors"
                                         >
-                                            <span className="font-semibold text-sm text-[#0B1E5C]">{t(entry.questionKey)}</span>
+                                            <span className="font-semibold text-sm text-[#0B1E5C]">{entry.question}</span>
                                             <ChevronDown
                                                 className={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${isOpenQ ? 'rotate-180' : ''}`}
                                             />
                                         </button>
                                         {isOpenQ && (
                                             <div className="px-5 pb-4 text-sm text-gray-600 leading-relaxed">
-                                                {t(entry.answerKey)}
+                                                {entry.answer}
                                             </div>
                                         )}
                                     </div>
@@ -195,9 +196,9 @@ const FAQModal = ({ isOpen, onClose }: FAQModalProps) => {
                                 <Mail className="w-5 h-5 text-[#0B1E5C]" />
                             </div>
                             <div>
-                                <h3 className="font-bold text-[#0B1E5C] text-sm">{t('faqNoAnswerTitle')}</h3>
+                                <h3 className="font-bold text-[#0B1E5C] text-sm">Vous n'avez pas trouve la reponse ?</h3>
                                 <p className="text-xs text-gray-600 mt-0.5">
-                                    {t('faqNoAnswerDescription')}
+                                    Notre equipe est disponible 24h/7j pour vous accompagner.
                                 </p>
                             </div>
                         </div>
@@ -206,7 +207,7 @@ const FAQModal = ({ isOpen, onClose }: FAQModalProps) => {
                             style={{ background: '#0B1E5C' }}
                         >
                             <Mail className="w-4 h-4" />
-                            {t('assistanceContactTitle')}
+                            Nous contacter
                         </button>
                     </div>
                 </div>

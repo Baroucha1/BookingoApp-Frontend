@@ -17,30 +17,29 @@ export const NewsletterBanner = () => {
                     className="absolute inset-0 w-full h-full object-cover"
                 />
 
-
                 {/* Text */}
-                <div className="relative z-10 text-center md:text-left max-w-md">
+                <div className="relative z-10 text-center md:text-start max-w-md">
                     <h3 className="text-white text-lg md:text-xl font-bold mb-1.5">
                         {t('hotelNewsletterTitle')}
                     </h3>
-                    <p className="text-[#002161] text-sm">
-                        {t('hotelNewsletterDescription')}
+                    <p className="text-blue-100 text-sm">
+                        {t('hotelNewsletterSubtitle')}
                     </p>
                 </div>
 
                 {/* Merged input + button */}
-                <form className="relative z-10 flex items-center w-full md:w-auto max-w-md bg-white rounded-xl  shrink-0">
+                <form className="relative z-10 flex items-center w-full md:w-auto max-w-md bg-white rounded-xl shrink-0" onSubmit={(e) => e.preventDefault()}>
                     <input
                         type="email"
-                        placeholder={t('hotelEmailPlaceholder')}
+                        placeholder={t('hotelNewsletterEmailPlaceholder')}
                         className="flex-1 min-w-0 bg-transparent px-4 py-2 text-sm text-gray-900 outline-none placeholder:text-gray-400"
                     />
                     <Button
                         type="submit"
-                        className="rounded-r-xl  px-6 font-semibold shrink-0"
+                        className="rounded-r-xl px-6 font-semibold shrink-0 cursor-pointer"
                         style={{ background: '#F5A623', color: '#0B2A5C' }}
                     >
-                        {t('hotelSubscribe')}
+                        {t('hotelNewsletterSubscribe')}
                     </Button>
                 </form>
             </div>

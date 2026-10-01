@@ -1,8 +1,9 @@
 import {useEffect, useRef, useState} from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import { CheckCircle2, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { confirmCustomSatimPayment, type SatimConfirmResult } from '@/service/payment.service';
+import AppLoading from '@/components/common/AppLoading';
 
 type ResultState = 'loading' | 'success' | 'failed' | 'error';
 
@@ -36,16 +37,18 @@ export default function SatimCustomResult() {
             });
     }, [paymentId, orderId]);
 
+    if (state === 'loading') {
+        return (
+            <AppLoading
+                message="Vérification du paiement en cours..."
+                subMessage="Confirmation auprès de SATIM..."
+            />
+        );
+    }
+
     return (
         <div className="min-h-screen flex items-center justify-center px-4">
             <div className="max-w-md w-full text-center space-y-6">
-
-                {state === 'loading' && (
-                    <>
-                        <Loader2 className="w-12 h-12 animate-spin text-primary mx-auto" />
-                        <p className="text-muted-foreground">Vérification du paiement...</p>
-                    </>
-                )}
 
                 {state === 'success' && result && (
                     <>

@@ -1,32 +1,23 @@
-import { useEffect, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useMemo, useRef, useState, useEffect } from 'react';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Briefcase, Check, Loader2, Truck, X } from 'lucide-react';
 import BookingStepper from '@/components/flights/BookingStepper';
 import FlightSummaryCard from '@/components/flights/FlightSummaryCard';
 import PassengerForm from '@/components/flights/PassengerForm';
-import PassportScanner, { type MrzResult } from '@/components/PassportScanner';
 import { Button } from '@/components/ui/button';
-import { isDomesticAlgeria, type PassengerFormData } from '@/context/FlightContext';
+import {isDomesticAlgeria, PassengerFormData} from '@/context/FlightContext';
 import { useToast } from '@/hooks/use-toast';
-import { bookFlight, orderReserve } from '@/service/flights_aggregator/book.service';
-import type { OrderReserveResult, PassengerInput, AggregatedSearchParams } from '@/service/flights_aggregator/aggregatedTypes.ts';
-import type { DisplayOffer } from '@/service/flights_aggregator/aggregatedNormalize';
+import {bookFlight, orderReserve} from '@/service/flights_aggregator/book.service';
+import {OrderReserveResult, type PassengerInput} from '@/service/flights_aggregator/aggregatedTypes.ts';
+import { normalizeAggregatedOffer, type DisplayOffer } from '@/service/flights_aggregator/aggregatedNormalize';
+import { repriceFlight } from '@/service/flights_aggregator/aggregatedSearch.service';
 import { initiateFlightSatimPayment } from '@/service/payment.service';
-import { encodeSearchParams } from '@/service/flights_aggregator/SearchParmsCodec.ts';
-import LoyaltyCardFields from "@/components/flights/LoyaltyCardFields.tsx";
+import { useAuth } from '@/hooks/useAuth';
+import AppLoading from '@/components/common/AppLoading';
 
-const RESULTS_PATH = '/flights/v2';
-const PENDING_KEY = 'pendingFlightBooking';
-
-interface BookingState {
-    offer: DisplayOffer;
-    searchParams?: AggregatedSearchParams | null;
-    returnTo?: { pathname: string; search?: string };
-}
-
-const mockPassenger = (type: 'ADT' | 'CHD' | 'INF'): PassengerFormData => ({
+const emptyPassenger = (type: 'ADT' | 'CHD' | 'INF'): PassengerFormData => ({
     paxType: type,
-    passengerTitle: 'MR',
+    passengerTitle: '',
     firstName: '',
     lastName: '',
     birthday: '',
@@ -34,17 +25,18 @@ const mockPassenger = (type: 'ADT' | 'CHD' | 'INF'): PassengerFormData => ({
     typeDoc: 'P',
     passportNumber: '',
     expiryDate: '',
-    nationality: 'Algerian',
+    nationality: 'DZ',
     mail: '',
     tel: '',
 });
-
 function calculateAge(birthday: string, referenceDate: string): number {
     const birth = new Date(birthday);
     const ref = new Date(referenceDate);
     let age = ref.getFullYear() - birth.getFullYear();
     const monthDiff = ref.getMonth() - birth.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && ref.getDate() < birth.getDate())) age--;
+    if (monthDiff < 0 || (monthDiff === 0 && ref.getDate() < birth.getDate())) {
+        age--;
+    }
     return age;
 }
 
@@ -53,7 +45,6 @@ function validatePassenger(
     isFirst: boolean,
     requireDocument: boolean,
     travelDate: string,
-
 ): Record<string, string> {
     const errors: Record<string, string> = {};
     if (!p.passengerTitle) errors.passengerTitle = 'Requis';
@@ -80,15 +71,6 @@ function validatePassenger(
     }
     if (!p.nationality.trim()) errors.nationality = 'Requis';
 
-    if (p.paxType !== 'INF') {
-        const fidNumber = (p.fidelityNumber ?? '').replace(/\s+/g, '');
-        const fidAirline = (p.fidelityAirline ?? '').trim();
-        if (fidNumber) {
-            if (!/^[A-Z0-9]{2}$/i.test(fidAirline)) errors.fidelityAirline = 'Code à 2 caractères';
-            if (!/^[A-Z0-9]{4,25}$/i.test(fidNumber)) errors.fidelityNumber = 'Numéro invalide';
-        }
-    }
-
     if (isFirst) {
         if (!p.mail?.trim()) errors.mail = 'Requis';
         else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.mail)) errors.mail = 'Email invalide';
@@ -99,61 +81,87 @@ function validatePassenger(
 }
 
 function toBookingPassengers(passengers: PassengerFormData[]): PassengerInput[] {
-    return passengers.map((p) => {
-        const fidelityNumber = (p.fidelityNumber ?? '').replace(/\s+/g, '');
-        const hasCard = p.paxType !== 'INF' && !!fidelityNumber;
-        return {
-            paxType: p.paxType,
-            passengerTitle: p.passengerTitle,
-            firstName: p.firstName,
-            lastName: p.lastName,
-            birthday: p.birthday,
-            sexe: p.sexe,
-            nationality: p.nationality,
-            typeDoc: p.typeDoc,
-            passportNumber: p.passportNumber,
-            expiryDate: p.expiryDate,
-            mail: p.mail,
-            tel: p.tel,
-            ...(hasCard && {
-                fidelityAirline: (p.fidelityAirline ?? '').trim().toUpperCase(),
-                fidelityNumber,
-            }),
-        };
-    });
+    return passengers.map((p) => ({
+        paxType: p.paxType,
+        passengerTitle: p.passengerTitle,
+        firstName: p.firstName,
+        lastName: p.lastName,
+        birthday: p.birthday,
+        sexe: p.sexe,
+        nationality: p.nationality,
+        typeDoc: p.typeDoc,
+        passportNumber: p.passportNumber,
+        expiryDate: p.expiryDate,
+        mail: p.mail,
+        tel: p.tel,
+    }));
 }
 
 export default function AggregatedFlightBooking() {
     const navigate = useNavigate();
     const location = useLocation();
+    const [searchParams] = useSearchParams();
     const { toast } = useToast();
+    const { user } = useAuth();
 
-    // ── Restore: router state first, then sessionStorage (reload / login redirect) ──
-    const [restoredState] = useState<BookingState | null>(() => {
-        const fromRouter = location.state as BookingState | null;
-        if (fromRouter?.offer) return fromRouter;
+    const [directOffer, setDirectOffer] = useState<DisplayOffer | null>(null);
+    const [loadingDirectOffer, setLoadingDirectOffer] = useState(false);
+    const [directOfferError, setDirectOfferError] = useState<string | null>(null);
+
+    const state = location.state as { offer?: DisplayOffer; searchParams?: any } | null;
+    const [restoredState] = useState(() => {
+        if (state?.offer) return state;
+        const stored = sessionStorage.getItem('pendingFlightBooking');
+        if (!stored) return null;
         try {
-            const stored = sessionStorage.getItem(PENDING_KEY);
-            return stored ? (JSON.parse(stored) as BookingState) : null;
+            return JSON.parse(stored);
         } catch {
             return null;
         }
     });
-    const offer = restoredState?.offer ?? null;
-    const searchParams = restoredState?.searchParams ?? null;
+    const offer = directOffer ?? restoredState?.offer ?? null;
 
     const [step, setStep] = useState<2 | 4>(2);
     const [passengers, setPassengers] = useState<PassengerFormData[]>(() => {
-        if (!offer) return [];
-        const counts = searchParams ?? { adults: 1, children: 0, infants: 0 };
-        return [
-            ...Array.from({ length: counts.adults ?? 1 }, () => mockPassenger('ADT')),
-            ...Array.from({ length: counts.children ?? 0 }, () => mockPassenger('CHD')),
-            ...Array.from({ length: counts.infants ?? 0 }, () => mockPassenger('INF')),
-        ];
+        const counts = state?.searchParams ?? { adults: 1, children: 0, infants: 0 };
+        const pax: PassengerFormData[] = [];
+        for (let i = 0; i < (counts.adults ?? 1); i++) {
+            const p = emptyPassenger('ADT');
+            pax.push(p);
+        }
+        for (let i = 0; i < (counts.children ?? 0); i++) pax.push(emptyPassenger('CHD'));
+        for (let i = 0; i < (counts.infants ?? 0); i++) pax.push(emptyPassenger('INF'));
+        return pax;
     });
+
+    const fareSourceCodeParam = searchParams.get('fareSourceCode') || searchParams.get('code');
+    useEffect(() => {
+        if (offer || !fareSourceCodeParam) return;
+        setLoadingDirectOffer(true);
+        setDirectOfferError(null);
+        repriceFlight(fareSourceCodeParam)
+            .then((raw) => {
+                const normalized = normalizeAggregatedOffer(raw);
+                setDirectOffer(normalized);
+                const adults = parseInt(searchParams.get('adults') || '1', 10);
+                const children = parseInt(searchParams.get('children') || '0', 10);
+                const infants = parseInt(searchParams.get('infants') || '0', 10);
+                const pax: PassengerFormData[] = [];
+                for (let i = 0; i < adults; i++) pax.push(emptyPassenger('ADT'));
+                for (let i = 0; i < children; i++) pax.push(emptyPassenger('CHD'));
+                for (let i = 0; i < infants; i++) pax.push(emptyPassenger('INF'));
+                setPassengers(pax);
+            })
+            .catch((err: any) => {
+                console.error("Direct flight link error:", err);
+                setDirectOfferError(err?.message || "Impossible de charger le vol depuis ce lien.");
+            })
+            .finally(() => {
+                setLoadingDirectOffer(false);
+            });
+    }, [fareSourceCodeParam]);
+
     const [errors, setErrors] = useState<Record<number, Record<string, string>>>({});
-    const [scannerOpenFor, setScannerOpenFor] = useState<number | null>(null);
     const [booking, setBooking] = useState(false);
     const [bookingResult, setBookingResult] = useState<any>(null);
     const [bookingError, setBookingError] = useState<string | null>(null);
@@ -170,99 +178,48 @@ export default function AggregatedFlightBooking() {
     const [selectedOfficeId, setSelectedOfficeId] = useState('');
     const [deliveryDetails, setDeliveryDetails] = useState({ address: '', wilaya: '', city: '', phone: '' });
 
-    // ── Effects (all before any early return) ──
     useEffect(() => {
-        let cancelled = false;
         fetch(`${import.meta.env.VITE_API_URL ?? ''}/api/contact/offices`)
-            .then((res) => {
-                if (!res.ok) throw new Error('Impossible de charger les agences');
-                return res.json();
+            .then(async (res) => {
+                if (!res.ok) return;
+                const data = await res.json();
+                setOffices(Array.isArray(data) ? data : (data.offices || []));
             })
-            .then((data) => { if (!cancelled) setOffices(data); })
             .catch((error) => console.error('[AggregatedFlightBooking] offices:', error));
-        return () => { cancelled = true; };
     }, []);
 
+    // Auto-fill account info if logged in
     useEffect(() => {
-        if (skipRecaptcha || document.getElementById('recaptcha-script')) return;
-        const script = document.createElement('script');
-        script.id = 'recaptcha-script';
-        script.src = 'https://www.google.com/recaptcha/api.js?render=explicit';
-        script.async = true;
-        document.head.appendChild(script);
-    }, [skipRecaptcha]);
+        if (!user) return;
+        setPassengers(prev => {
+            if (prev.length === 0) return prev;
+            const first = prev[0];
+            if (first.firstName && first.lastName && first.mail) return prev;
+            const updated = [...prev];
+            updated[0] = {
+                ...first,
+                firstName: first.firstName || user.name || '',
+                lastName: first.lastName || user.lastName || '',
+                mail: first.mail || user.email || '',
+                tel: first.tel || user.phone || '',
+            };
+            return updated;
+        });
+    }, [user]);
 
-    // Render the widget while SATIM is selected; the container unmounts when switching method,
-    // so the cleanup just forgets the old widget id.
     useEffect(() => {
-        if (!offer || step !== 2 || paymentMethod !== 'satim' || skipRecaptcha) return;
-        let cancelled = false;
-        let timer: ReturnType<typeof setTimeout> | undefined;
-
-        const tryRender = () => {
-            if (cancelled) return;
-            if (!window.grecaptcha?.render || !recaptchaRef.current) {
-                timer = setTimeout(tryRender, 300);
-                return;
-            }
-            if (recaptchaWidgetId.current !== null) return;
-            recaptchaWidgetId.current = window.grecaptcha.render(recaptchaRef.current, {
-                sitekey: import.meta.env.VITE_RECAPTCHA_SITE_KEY,
-                callback: () => setCaptchaVerified(true),
-                'expired-callback': () => setCaptchaVerified(false),
-            });
-        };
-        tryRender();
-
-        return () => {
-            cancelled = true;
-            if (timer) clearTimeout(timer);
-            recaptchaWidgetId.current = null;
-            setCaptchaVerified(false);
-        };
-    }, [offer, step, paymentMethod, skipRecaptcha]);
-
-    // ── Back to results ──
-    const backToResults = () => {
-        // 1. Exact URL the user came from (if the results page passed it)
-        if (restoredState?.returnTo) {
-            navigate(`${restoredState.returnTo.pathname}${restoredState.returnTo.search ?? ''}`);
-            return;
+        if (offer) {
+            sessionStorage.removeItem('pendingFlightBooking');
         }
-        // 2. Rebuild the results URL from the search criteria — the results page re-runs the search
-        if (searchParams) {
-            navigate(`${RESULTS_PATH}?${encodeSearchParams(searchParams).toString()}`);
-            return;
-        }
-        // 3. Nothing to rebuild from
-        navigate('/flights');
-    };
+    }, [offer]);
 
-    if (!offer) {
-        return (
-            <div
-                className="min-h-screen flex items-center justify-center"
-                style={{ background: 'linear-gradient(160deg, #08082e 0%, #0a1550 35%, #0865FE 100%)' }}
-            >
-                <div className="text-white/60 text-center">
-                    <p>Aucun vol sélectionné.</p>
-                    <Button onClick={() => navigate('/flights')} className="mt-4 bg-[#0865FE] hover:bg-[#0865FE]/90 text-white">
-                        Rechercher un vol
-                    </Button>
-                </div>
-            </div>
-        );
-    }
-
-    const isDomestic = isDomesticAlgeria(offer);
-    const travelDate = offer.legs[0].segments[0].departure.dateTime;
-
-    const defaultLoyaltyAirline = offer.legs[0]?.segments[0]?.carrierCode ?? '';
+    const isDomestic = offer ? isDomesticAlgeria(offer) : false;
+    const travelDate = offer?.legs?.[0]?.segments?.[0]?.departure?.dateTime || offer?.departureDate || new Date().toISOString();
 
     const passengerCounts = {
-        adults: searchParams?.adults ?? (passengers.filter((p) => p.paxType === 'ADT').length || 1),
-        children: searchParams?.children ?? passengers.filter((p) => p.paxType === 'CHD').length,
-        infants: searchParams?.infants ?? passengers.filter((p) => p.paxType === 'INF').length,
+        adults: state?.searchParams?.adults ?? (passengers.filter(p => p.paxType === 'ADT').length || 1),
+        children: state?.searchParams?.children ?? passengers.filter(p => p.paxType === 'CHD').length,
+        infants: state?.searchParams?.infants ?? passengers.filter(p => p.paxType === 'INF').length,
     };
 
     const validatePassengers = () => {
@@ -281,51 +238,142 @@ export default function AggregatedFlightBooking() {
         return true;
     };
 
-    const resetCaptcha = () => {
-        if (skipRecaptcha || recaptchaWidgetId.current === null || !window.grecaptcha) return;
-        window.grecaptcha.reset(recaptchaWidgetId.current);
+    useEffect(() => {
+        if (document.getElementById('recaptcha-script')) return;
+        const script = document.createElement('script');
+        script.id = 'recaptcha-script';
+        script.src = 'https://www.google.com/recaptcha/api.js?render=explicit';
+        script.async = true;
+        document.head.appendChild(script);
+    }, []);
+
+    useEffect(() => {
+        if (step !== 2 || paymentMethod !== 'satim' || skipRecaptcha) return;
+        let isMounted = true;
+
+        const tryRender = () => {
+            if (!isMounted) return;
+            const grecaptcha = window.grecaptcha;
+            if (!grecaptcha || typeof grecaptcha.render !== 'function' || !recaptchaRef.current) {
+                setTimeout(tryRender, 300);
+                return;
+            }
+            if (recaptchaWidgetId.current !== null) return;
+            try {
+                if (typeof grecaptcha.ready === 'function') {
+                    grecaptcha.ready(() => {
+                        if (!isMounted || !recaptchaRef.current || recaptchaWidgetId.current !== null) return;
+                        recaptchaWidgetId.current = grecaptcha.render(recaptchaRef.current, {
+                            sitekey: import.meta.env.VITE_RECAPTCHA_SITE_KEY,
+                            callback: () => setCaptchaVerified(true),
+                            'expired-callback': () => setCaptchaVerified(false),
+                        });
+                    });
+                } else {
+                    recaptchaWidgetId.current = grecaptcha.render(recaptchaRef.current, {
+                        sitekey: import.meta.env.VITE_RECAPTCHA_SITE_KEY,
+                        callback: () => setCaptchaVerified(true),
+                        'expired-callback': () => setCaptchaVerified(false),
+                    });
+                }
+            } catch (err) {
+                console.warn('reCAPTCHA render error:', err);
+            }
+        };
+
+        tryRender();
+
+        return () => {
+            isMounted = false;
+        };
+    }, [step, paymentMethod]);
+
+    useEffect(() => {
         setCaptchaVerified(false);
-    };
+        if (recaptchaWidgetId.current !== null && window.grecaptcha && typeof window.grecaptcha.reset === 'function') {
+            try {
+                window.grecaptcha.reset(recaptchaWidgetId.current);
+            } catch (e) { }
+            recaptchaWidgetId.current = null;
+        }
+    }, [paymentMethod]);
 
     const handlePaySatim = async () => {
         if (!validatePassengers()) return;
 
-        let captchaToken = '';
-        if (!skipRecaptcha) {
-            captchaToken = window.grecaptcha.getResponse(recaptchaWidgetId.current);
-            if (!captchaToken) {
-                toast({ title: 'reCAPTCHA requis', description: 'Veuillez valider le reCAPTCHA.', variant: 'destructive' });
-                return;
-            }
-        }
-
         setBooking(true);
         setBookingError(null);
         try {
-            // Reuse the booking if a previous payment attempt failed — avoids duplicate PNRs
-            const result = bookingResult ?? await bookFlight(offer.fareSourceCode!, toBookingPassengers(passengers), offer.price);
-            setBookingResult(result);
+            let captchaToken = '';
+            if (!skipRecaptcha) {
+                if (window.grecaptcha?.getResponse) {
+                    try {
+                        captchaToken = recaptchaWidgetId.current !== null
+                            ? window.grecaptcha.getResponse(recaptchaWidgetId.current)
+                            : window.grecaptcha.getResponse();
+                    } catch {
+                        captchaToken = '';
+                    }
+                }
+                if (!captchaToken) {
+                    toast({ title: 'reCAPTCHA requis', description: 'Veuillez valider le reCAPTCHA avant de continuer.', variant: 'destructive' });
+                    setBooking(false);
+                    return;
+                }
+            }
 
-            const { formUrl } = await initiateFlightSatimPayment(result.dbId, captchaToken);
-            sessionStorage.removeItem(PENDING_KEY);
+            const result = await bookFlight(offer.fareSourceCode!, toBookingPassengers(passengers), offer.price);
+
+            const resolvedData = (result as any)?.data && typeof (result as any).data === 'object'
+                ? { ...(result as any).data, ...result }
+                : result;
+
+            const bookingId =
+                resolvedData?.dbId ||
+                resolvedData?.id ||
+                resolvedData?.bookingId ||
+                resolvedData?._id ||
+                resolvedData?.flightBookingId ||
+                (result as any)?.dbId ||
+                (result as any)?.id ||
+                (result as any)?.bookingId ||
+                (result as any)?.data?.id ||
+                (result as any)?.data?._id ||
+                (result as any)?.data?.dbId;
+
+            if (!bookingId) {
+                console.error("Book flight response missing booking ID:", result);
+                throw new Error("Identifiant de réservation introuvable.");
+            }
+            setBookingResult({
+                ...resolvedData,
+                dbId: bookingId,
+                id: bookingId,
+            });
+            const { formUrl } = await initiateFlightSatimPayment(bookingId, captchaToken);
             window.location.href = formUrl;
         } catch (err: any) {
-            const detail = err?.message ?? 'Erreur lors de la réservation.';
+            const rawMsg = err?.message ?? '';
+            const detail = (rawMsg && rawMsg !== 'null' && rawMsg !== '[object Object]')
+                ? rawMsg
+                : 'Erreur lors de la réservation ou du paiement.';
             setBookingError(detail);
-            resetCaptcha(); // tokens are single-use
             toast({ title: 'Réservation échouée', description: detail, variant: 'destructive' });
+        } finally {
             setBooking(false);
         }
     };
 
     const handlePayOffline = async () => {
         if (!validatePassengers()) return;
+
         if (paymentMethod === 'agence' && !selectedOfficeId) {
-            toast({ title: 'Agence requise', description: 'Veuillez sélectionner une agence avant de confirmer.', variant: 'destructive' });
+            toast({ title: 'Agence requise', description: 'Veuillez sélectionner une agence pour le paiement.', variant: 'destructive' });
             return;
         }
+
         if (paymentMethod === 'delivery' && !Object.values(deliveryDetails).every((value) => value.trim())) {
-            toast({ title: 'Adresse de livraison requise', description: "Veuillez renseigner l'adresse, la wilaya, la ville et le téléphone.", variant: 'destructive' });
+            toast({ title: 'Adresse de livraison requise', description: 'Veuillez renseigner l’adresse, la wilaya, la ville et le téléphone.', variant: 'destructive' });
             return;
         }
 
@@ -340,12 +388,37 @@ export default function AggregatedFlightBooking() {
                 paymentMethod === 'agence' ? selectedOfficeId : undefined,
                 paymentMethod === 'delivery' ? deliveryDetails : undefined,
             );
-            setBookingResult(result);
+            const resolvedData = (result as any)?.data && typeof (result as any).data === 'object'
+                ? { ...(result as any).data, ...result }
+                : result;
+
+            const bookingId =
+                resolvedData?.dbId ||
+                resolvedData?.id ||
+                resolvedData?.bookingId ||
+                resolvedData?._id ||
+                resolvedData?.flightBookingId ||
+                (result as any)?.dbId ||
+                (result as any)?.id ||
+                (result as any)?.bookingId ||
+                (result as any)?.data?.id ||
+                (result as any)?.data?._id ||
+                (result as any)?.data?.dbId;
+
+            const normalizedResult = {
+                ...resolvedData,
+                dbId: bookingId,
+                id: bookingId,
+            };
+            setBookingResult(normalizedResult);
 
             if (offer.fareSourceCode?.startsWith('TK_NDC:')) {
                 try {
-                    setReserveInfo(await orderReserve(result.dbId));
-                } catch {
+                    if (bookingId) {
+                        const reserved = await orderReserve(bookingId);
+                        setReserveInfo((reserved as any)?.data ?? reserved);
+                    }
+                } catch (reserveErr: any) {
                     toast({
                         title: 'Réservation créée, mais délai de paiement non prolongé',
                         description: 'Le paiement doit être effectué rapidement (délai réduit).',
@@ -354,11 +427,12 @@ export default function AggregatedFlightBooking() {
                 }
             }
 
-            sessionStorage.removeItem(PENDING_KEY);
             setStep(4);
             toast({
                 title: 'Réservation confirmée',
-                description: paymentMethod === 'delivery' ? 'Vous serez contacté pour organiser la livraison.' : 'Paiement à régler en agence.',
+                description: paymentMethod === 'delivery'
+                    ? 'Vous serez contacté pour organiser la livraison.'
+                    : 'Paiement à régler en agence.',
             });
         } catch (err: any) {
             const detail = err?.message ?? 'Erreur lors de la réservation.';
@@ -369,36 +443,52 @@ export default function AggregatedFlightBooking() {
         }
     };
 
-    const methodCardStyle = (active: boolean) => ({
-        borderColor: active ? '#0865FE' : '#e5e7eb',
-        background: active ? 'rgba(8,101,254,0.04)' : '#fff',
-    });
+    if (loadingDirectOffer) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-[#DFECFF] via-[#F0F6FF] to-[#DFECFF]">
+                <AppLoading message="Chargement de votre vol..." subMessage="Récupération des détails de l'offre en direct..." />
+            </div>
+        );
+    }
 
-    const ActiveCheck = () => (
-        <span className="absolute top-2 right-2 w-4 h-4 rounded-full flex items-center justify-center bg-[#0865FE]">
-            <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />
-        </span>
-    );
+    if (!offer) {
+        return (
+            <div
+                className="min-h-screen flex items-center justify-center"
+                style={{ background: 'linear-gradient(160deg, #08082e 0%, #0a1550 35%, #0865FE 100%)' }}
+            >
+                <div className="text-white/80 text-center max-w-md px-4">
+                    <p className="font-semibold text-lg">{directOfferError || "Aucun vol sélectionné."}</p>
+                    <p className="text-sm text-white/60 mt-1">Le lien a peut-être expiré ou les places ne sont plus disponibles.</p>
+                    <Button onClick={() => navigate('/flights')} className="mt-4 bg-[#0865FE] hover:bg-[#0865FE]/90 text-white font-semibold">
+                        Rechercher un vol
+                    </Button>
+                </div>
+            </div>
+        );
+    }
 
     return (
-        <div
-            className="min-h-screen bg-cover bg-center bg-fixed"
-            style={{
-                backgroundImage: `linear-gradient(180deg, rgba(8,101,254,0.05) 0%, rgba(255,255,255,0.6) 60%), url("/assets/flights/booking.webp")`,
-                backgroundPosition: 'top center',
-                backgroundSize: 'cover',
-                backgroundAttachment: 'fixed',
-                backgroundRepeat: 'no-repeat',
-            }}
-        >
-            <div className="max-w-6xl mx-auto px-4 pt-24 pb-16">
+        <div className="min-h-screen bg-gradient-to-b from-[#DFECFF] via-[#F0F6FF] to-[#DFECFF]">
+            {booking && (
+                <AppLoading
+                    message="Réservation de votre vol en cours..."
+                    subMessage="Traitement de votre commande, veuillez patienter..."
+                />
+            )}
+            <div
+                className="max-w-6xl mx-auto px-4 pb-16"
+                style={{
+                    paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1rem)',
+                }}
+            >
                 {step < 4 && (
                     <button
-                        onClick={backToResults}
-                        className="text-[#0B0F2E]/70 hover:text-[#0865FE] flex items-center gap-2 text-sm mb-6 transition-colors font-medium"
+                        onClick={() => window.history.length > 1 ? navigate(-1) : navigate('/flights')}
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-slate-200 text-slate-700 hover:text-[#0865FE] hover:border-[#0865FE]/30 font-semibold text-xs shadow-xs hover:shadow-sm mb-6 transition-all cursor-pointer"
                     >
-                        <ArrowLeft className="w-4 h-4" />
-                        Retour aux résultats
+                        <ArrowLeft className="w-3.5 h-3.5" />
+                        <span>Retour aux résultats</span>
                     </button>
                 )}
 
@@ -410,7 +500,7 @@ export default function AggregatedFlightBooking() {
                     {step === 2 && (
                         <div className="space-y-6">
                             {/* Row 1: flight details + price summary */}
-                            <div className="grid lg:grid-cols-[1fr_340px] gap-6 items-start">
+                            <div className="grid lg:grid-cols-[1fr,340px] gap-6 items-start">
                                 <div className="space-y-3 bg-white p-4 rounded-sm">
                                     <h2 className="text-[#2E3ECD] text-lg font-bold uppercase tracking-wide">
                                         Détails du vol <span className="text-slate-400 font-normal normal-case text-sm">| Vérifiez votre itinéraire et les détails du tarif</span>
@@ -421,17 +511,19 @@ export default function AggregatedFlightBooking() {
                                 <div className="space-y-4">
                                     <div className="p-5 rounded-2xl bg-white shadow-sm space-y-4">
                                         <h3 className="text-[#0865FE] text-sm font-bold uppercase tracking-wide">Résumé du prix</h3>
+
                                         <div className="text-sm">
                                             <p className="text-slate-400 mb-1">Passagers</p>
                                             <p className="text-[#0B0F2E] font-medium">
                                                 {passengers.length} Passager{passengers.length > 1 ? 's' : ''}
                                             </p>
                                         </div>
+
                                         <div className="pt-3 border-t border-blue-100 flex items-center justify-between">
                                             <span className="text-slate-500 font-medium text-sm">Total</span>
                                             <span className="text-xl font-bold text-[#0865FE]">
-                                                {offer.price.toLocaleString('fr-FR')} {offer.currency}
-                                            </span>
+                            {offer.price.toLocaleString('fr-FR')} {offer.currency}
+                        </span>
                                         </div>
                                     </div>
 
@@ -442,47 +534,29 @@ export default function AggregatedFlightBooking() {
                             </div>
 
                             {/* Row 2: passenger info + payment method */}
-                            <div className="grid lg:grid-cols-[1fr_340px] gap-6 items-start">
+                            <div className="grid lg:grid-cols-[1fr,340px] gap-6 items-start">
                                 <div className="space-y-4 bg-white p-4 rounded-sm">
                                     <h2 className="text-[#0B0F2E] text-lg font-bold">Informations passagers</h2>
                                     <p className="text-slate-400 text-sm -mt-2">
                                         Les noms doivent correspondre exactement au document de voyage.
                                     </p>
                                     {passengers.map((p, i) => (
-                                        <div key={i} className="space-y-2">
-                                            <PassengerForm
-                                                index={i}
-                                                data={p}
-                                                travelDate={travelDate}
-                                                showContactFields={i === 0}
-                                                errors={errors[i] ?? {}}
-                                                onChange={(updated) => {
-                                                    setPassengers((prev) => {
-                                                        const next = [...prev];
-                                                        next[i] = updated;
-                                                        return next;
-                                                    });
-                                                }}
-                                                requireDocument={!isDomestic}
-                                            />
-
-
-                                            {p.paxType !== 'INF' && (
-                                                <LoyaltyCardFields
-                                                    airline={p.fidelityAirline ?? ''}
-                                                    number={p.fidelityNumber ?? ''}
-                                                    defaultAirline={defaultLoyaltyAirline}
-                                                    errors={errors[i] ?? {}}
-                                                    onChange={(fid) => {
-                                                        setPassengers((prev) => {
-                                                            const next = [...prev];
-                                                            next[i] = { ...next[i], ...fid };
-                                                            return next;
-                                                        });
-                                                    }}
-                                                />
-                                            )}
-                                        </div>
+                                        <PassengerForm
+                                            key={i}
+                                            index={i}
+                                            data={p}
+                                            travelDate={travelDate}
+                                            showContactFields={i === 0}
+                                            errors={errors[i] ?? {}}
+                                            onChange={(updated) => {
+                                                setPassengers((prev) => {
+                                                    const next = [...prev];
+                                                    next[i] = updated;
+                                                    return next;
+                                                });
+                                            }}
+                                            requireDocument={!isDomestic}
+                                        />
                                     ))}
                                 </div>
 
@@ -490,11 +564,15 @@ export default function AggregatedFlightBooking() {
                                     <div className="p-5 rounded-2xl bg-white shadow-sm space-y-4">
                                         <h3 className="text-[#0865FE] text-sm font-bold uppercase tracking-wide">Mode de paiement</h3>
 
-                                        <div className="grid grid-cols-1 gap-2">
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                                             <button type="button" onClick={() => setPaymentMethod('satim')}
                                                     className="relative rounded-xl border-2 p-3 text-left transition-all duration-200"
-                                                    style={methodCardStyle(paymentMethod === 'satim')}>
-                                                {paymentMethod === 'satim' && <ActiveCheck />}
+                                                    style={{ borderColor: paymentMethod === 'satim' ? '#0865FE' : '#e5e7eb', background: paymentMethod === 'satim' ? 'rgba(8,101,254,0.04)' : '#fff' }}>
+                                                {paymentMethod === 'satim' && (
+                                                    <span className="absolute top-2 right-2 w-4 h-4 rounded-full flex items-center justify-center" style={{ background: '#0865FE' }}>
+                                    <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />
+                                </span>
+                                                )}
                                                 <img src="/dhahabiaCIB.png" alt="CIB EDAHABIA" className="h-6 object-contain mb-1" />
                                                 <p className="font-semibold text-xs">CIB / EDAHABIA</p>
                                                 <p className="text-[11px] text-muted-foreground">Carte bancaire · SATIM</p>
@@ -502,8 +580,12 @@ export default function AggregatedFlightBooking() {
 
                                             <button type="button" onClick={() => setPaymentMethod('agence')}
                                                     className="relative rounded-xl border-2 p-3 text-left transition-all duration-200"
-                                                    style={methodCardStyle(paymentMethod === 'agence')}>
-                                                {paymentMethod === 'agence' && <ActiveCheck />}
+                                                    style={{ borderColor: paymentMethod === 'agence' ? '#0865FE' : '#e5e7eb', background: paymentMethod === 'agence' ? 'rgba(8,101,254,0.04)' : '#fff' }}>
+                                                {paymentMethod === 'agence' && (
+                                                    <span className="absolute top-2 right-2 w-4 h-4 rounded-full flex items-center justify-center" style={{ background: '#0865FE' }}>
+                                    <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />
+                                </span>
+                                                )}
                                                 <div className="h-6 w-6 rounded-md flex items-center justify-center mb-1" style={{ background: 'linear-gradient(135deg, #0865FE, #3B2F7E)' }}>
                                                     <Briefcase className="w-3.5 h-3.5 text-white" />
                                                 </div>
@@ -513,8 +595,12 @@ export default function AggregatedFlightBooking() {
 
                                             <button type="button" onClick={() => setPaymentMethod('delivery')}
                                                     className="relative rounded-xl border-2 p-3 text-left transition-all duration-200"
-                                                    style={methodCardStyle(paymentMethod === 'delivery')}>
-                                                {paymentMethod === 'delivery' && <ActiveCheck />}
+                                                    style={{ borderColor: paymentMethod === 'delivery' ? '#0865FE' : '#e5e7eb', background: paymentMethod === 'delivery' ? 'rgba(8,101,254,0.04)' : '#fff' }}>
+                                                {paymentMethod === 'delivery' && (
+                                                    <span className="absolute top-2 right-2 w-4 h-4 rounded-full flex items-center justify-center" style={{ background: '#0865FE' }}>
+                                    <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />
+                                </span>
+                                                )}
                                                 <div className="h-6 w-6 rounded-md flex items-center justify-center mb-1" style={{ background: 'linear-gradient(135deg, #0865FE, #3B2F7E)' }}>
                                                     <Truck className="w-3.5 h-3.5 text-white" />
                                                 </div>
@@ -526,21 +612,19 @@ export default function AggregatedFlightBooking() {
                                         {paymentMethod === 'satim' && (
                                             <div className="space-y-3 pt-1">
                                                 <label className="flex items-start gap-2 cursor-pointer">
-                                                    <input type="checkbox" checked={termsAccepted} onChange={(e) => setTermsAccepted(e.target.checked)}
+                                                    <input type="checkbox" checked={termsAccepted} onChange={e => setTermsAccepted(e.target.checked)}
                                                            className="mt-0.5 w-4 h-4 accent-[#0865FE] cursor-pointer" />
                                                     <span className="text-xs text-gray-700">
-                                                        J'accepte les{' '}
+                                    J'accepte les{' '}
                                                         <button type="button" onClick={() => setShowConditions(true)}
                                                                 className="text-[#0865FE] underline hover:text-[#0865FE]/80 font-medium">
-                                                            conditions d'utilisation
-                                                        </button>
-                                                    </span>
+                                        conditions d'utilisation
+                                    </button>
+                                </span>
                                                 </label>
-                                                {!skipRecaptcha && (
-                                                    <div className="flex justify-center overflow-x-auto">
-                                                        <div ref={recaptchaRef} />
-                                                    </div>
-                                                )}
+                                                <div className="flex justify-center">
+                                                    <div ref={recaptchaRef} />
+                                                </div>
                                             </div>
                                         )}
 
@@ -562,7 +646,9 @@ export default function AggregatedFlightBooking() {
                                                         </option>
                                                     ))}
                                                 </select>
-                                                {!offices.length && <p className="text-xs text-amber-600">Chargement des agences...</p>}
+                                                {!offices.length && (
+                                                    <p className="text-xs text-amber-600">Chargement des agences...</p>
+                                                )}
                                             </div>
                                         )}
 
@@ -574,7 +660,7 @@ export default function AggregatedFlightBooking() {
                                                     autoComplete="street-address"
                                                     placeholder="Adresse complète"
                                                     value={deliveryDetails.address}
-                                                    onChange={(e) => setDeliveryDetails((c) => ({ ...c, address: e.target.value }))}
+                                                    onChange={(e) => setDeliveryDetails((current) => ({ ...current, address: e.target.value }))}
                                                     className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:border-[#0865FE] focus:outline-none focus:ring-2 focus:ring-[#0865FE]/20"
                                                 />
                                                 <div className="grid grid-cols-2 gap-2">
@@ -583,7 +669,7 @@ export default function AggregatedFlightBooking() {
                                                         autoComplete="address-level1"
                                                         placeholder="Wilaya"
                                                         value={deliveryDetails.wilaya}
-                                                        onChange={(e) => setDeliveryDetails((c) => ({ ...c, wilaya: e.target.value }))}
+                                                        onChange={(e) => setDeliveryDetails((current) => ({ ...current, wilaya: e.target.value }))}
                                                         className="min-w-0 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:border-[#0865FE] focus:outline-none focus:ring-2 focus:ring-[#0865FE]/20"
                                                     />
                                                     <input
@@ -591,7 +677,7 @@ export default function AggregatedFlightBooking() {
                                                         autoComplete="address-level2"
                                                         placeholder="Ville"
                                                         value={deliveryDetails.city}
-                                                        onChange={(e) => setDeliveryDetails((c) => ({ ...c, city: e.target.value }))}
+                                                        onChange={(e) => setDeliveryDetails((current) => ({ ...current, city: e.target.value }))}
                                                         className="min-w-0 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:border-[#0865FE] focus:outline-none focus:ring-2 focus:ring-[#0865FE]/20"
                                                     />
                                                 </div>
@@ -600,7 +686,7 @@ export default function AggregatedFlightBooking() {
                                                     autoComplete="tel"
                                                     placeholder="Téléphone pour la livraison"
                                                     value={deliveryDetails.phone}
-                                                    onChange={(e) => setDeliveryDetails((c) => ({ ...c, phone: e.target.value }))}
+                                                    onChange={(e) => setDeliveryDetails((current) => ({ ...current, phone: e.target.value }))}
                                                     className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:border-[#0865FE] focus:outline-none focus:ring-2 focus:ring-[#0865FE]/20"
                                                 />
                                             </div>
@@ -612,7 +698,7 @@ export default function AggregatedFlightBooking() {
                                                 disabled={booking || !termsAccepted || (!skipRecaptcha && !captchaVerified)}
                                                 className="w-full h-12 bg-[#0865FE] hover:bg-[#0865FE]/90 text-white font-semibold rounded-xl flex items-center justify-center gap-2"
                                             >
-                                                {booking && <Loader2 className="w-4 h-4 animate-spin" />}
+                                                {booking ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                                                 {booking ? 'Redirection...' : 'Payer maintenant'}
                                             </Button>
                                         ) : (
@@ -621,10 +707,12 @@ export default function AggregatedFlightBooking() {
                                                 disabled={booking || (paymentMethod === 'agence' && !selectedOfficeId)}
                                                 className="w-full h-12 bg-[#0865FE] hover:bg-[#0865FE]/90 text-white font-semibold rounded-xl flex items-center justify-center gap-2"
                                             >
-                                                {booking && <Loader2 className="w-4 h-4 animate-spin" />}
+                                                {booking ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                                                 {booking ? 'Enregistrement...' : 'Confirmer la réservation'}
                                             </Button>
                                         )}
+
+
                                     </div>
 
                                     {bookingError && (
@@ -632,10 +720,7 @@ export default function AggregatedFlightBooking() {
                                             <div className="font-semibold">Réservation échouée</div>
                                             <div>{bookingError}</div>
                                             <div className="text-red-400 text-xs mt-1">
-                                                Ce vol n'est peut-être plus disponible.{' '}
-                                                <button type="button" onClick={backToResults} className="underline font-medium">
-                                                    Retour aux résultats
-                                                </button>
+                                                Ce vol n'est peut-être plus disponible. Veuillez relancer une recherche.
                                             </div>
                                         </div>
                                     )}
@@ -670,6 +755,7 @@ export default function AggregatedFlightBooking() {
 
                     {step === 4 && bookingResult && (
                         <div className="max-w-3xl mx-auto space-y-6 text-center">
+
                             <div>
                                 <h2 className="text-[#0B0F2E] text-2xl font-bold mb-2">Réservation confirmée !</h2>
                                 <p className="text-slate-400 text-sm">Un email de confirmation a été envoyé.</p>
@@ -682,12 +768,13 @@ export default function AggregatedFlightBooking() {
                                         <div className="text-3xl font-bold text-[#0865FE] tracking-widest">{bookingResult.bookingRef}</div>
                                     </div>
                                 )}
+
                                 {reserveInfo?.paymentTimeLimit && (
                                     <div className="text-center pt-3 border-t border-blue-100">
                                         <div className="text-slate-400 text-xs uppercase tracking-wide mb-1">Délai de paiement</div>
                                         <div className="text-sm font-semibold text-[#0B0F2E]">
                                             {new Date(reserveInfo.paymentTimeLimit).toLocaleString('fr-FR', {
-                                                day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+                                                day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false,
                                             })}
                                         </div>
                                     </div>
@@ -696,9 +783,12 @@ export default function AggregatedFlightBooking() {
 
                             <FlightSummaryCard offer={offer} passengers={passengerCounts} />
 
-                            <div className="flex flex-col sm:flex-row gap-3">
+                            <div className="flex gap-3">
                                 <Button
-                                    onClick={() => navigate(`/flights/booking/${bookingResult.dbId}`)}
+                                    onClick={() => {
+                                        const idToNavigate = bookingResult.dbId || bookingResult.id || (bookingResult as any)._id || bookingResult.bookingRef;
+                                        navigate(`/flights/booking/${idToNavigate}`);
+                                    }}
                                     className="flex-1 bg-[#0865FE] hover:bg-[#0865FE]/90 text-white font-semibold"
                                 >
                                     Voir la réservation
@@ -715,39 +805,6 @@ export default function AggregatedFlightBooking() {
                     )}
                 </div>
             </div>
-            <PassportScanner
-                open={scannerOpenFor !== null}
-                onOpenChange={(open) => {
-                    if (!open) setScannerOpenFor(null);
-                }}
-                onResult={(data: MrzResult) => {
-                    const passengerIndex = scannerOpenFor;
-                    if (passengerIndex === null) return;
-
-                    setPassengers((prev) => prev.map((passenger, index) =>
-                        index === passengerIndex
-                            ? {
-                                ...passenger,
-                                firstName: data.firstName || passenger.firstName,
-                                lastName: data.lastName || passenger.lastName,
-                                birthday: data.birthDate || passenger.birthday,
-                                nationality: data.nationality || passenger.nationality,
-                                passportNumber: data.passportNumber || passenger.passportNumber,
-                                expiryDate: data.passportExpiryDate || passenger.expiryDate,
-                            }
-                            : passenger
-                    ));
-
-                    setErrors((prev) => {
-                        const passengerErrors = { ...(prev[passengerIndex] ?? {}) };
-                        ['firstName', 'lastName', 'birthday', 'nationality', 'passportNumber', 'expiryDate']
-                            .forEach((field) => delete passengerErrors[field]);
-                        return { ...prev, [passengerIndex]: passengerErrors };
-                    });
-
-                    setScannerOpenFor(null);
-                }}
-            />
         </div>
     );
 }

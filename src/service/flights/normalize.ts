@@ -51,7 +51,10 @@ function num(v: any): number {
 function extractTime(iso: string | undefined): string {
   if (!iso) return '--:--';
   const match = /T(\d{2}:\d{2})/.exec(iso);
-  return match ? match[1] : '--:--';
+  if (match) return match[1];
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '--:--';
+  return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', hour12: false });
 }
 
 function isoDurationToDisplay(iso: string | undefined): string {

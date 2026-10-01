@@ -4,7 +4,6 @@ import { X, Loader2, MapPin } from 'lucide-react';
 import { getAggregatedDestinations, AggregatedDestination } from '@/service/flights_aggregator/aggregatedSearch.service';
 import { FALLBACK_AIRPORTS } from '@/service/flights/airports';
 import type { Airport } from '@/service/flights/airports';
-import { useLanguage } from '@/i18n/LanguageContext';
 
 interface Props {
     open: boolean;
@@ -17,7 +16,6 @@ const airportByCode = new Map<string, Airport>(
 );
 
 export default function AllDestinationsModal({ open, onClose, onSelect }: Props) {
-    const { t } = useLanguage();
     const [destinations, setDestinations] = useState<AggregatedDestination[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -61,13 +59,13 @@ export default function AllDestinationsModal({ open, onClose, onSelect }: Props)
         // so nothing is silently hidden — just displayed with less detail
         if (unresolved.length > 0) {
             groups.set(
-                t('destinationOther'),
-                unresolved.map((code) => ({ code, city: code, name: '', country: t('destinationOther') } as Airport))
+                'Autres destinations',
+                unresolved.map((code) => ({ code, city: code, name: '', country: 'Autres destinations' } as Airport))
             );
         }
 
         return groups;
-    }, [destinations, t]);
+    }, [destinations]);
 
     const countries = useMemo(
         () => Array.from(grouped.keys()).sort((a, b) => a.localeCompare(b)),
@@ -110,14 +108,20 @@ export default function AllDestinationsModal({ open, onClose, onSelect }: Props)
     return (
         // Fixed, full-viewport overlay — z-[100] to sit above everything else,
         // including any header/nav that might otherwise clip it.
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50">
+        <div 
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50"
+            style={{
+                paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1rem)',
+                paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)',
+            }}
+        >
             <div
-                className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[80vh] flex flex-col overflow-hidden"
+                className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[calc(100dvh-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px)-2rem)] flex flex-col overflow-hidden"
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Dark header bar */}
                 <div className="bg-[#1A202C] text-white px-5 py-4 flex items-center justify-between shrink-0">
-                    <span className="text-sm">{t('destinationPickerIntro')}</span>
+                    <span className="text-sm">Vous pouvez choisir parmi les pays et villes ci-dessous.</span>
                     <button type="button" onClick={onClose} className="text-white/70 hover:text-white shrink-0 ml-4">
                         <X className="w-5 h-5" />
                     </button>
@@ -128,7 +132,7 @@ export default function AllDestinationsModal({ open, onClose, onSelect }: Props)
                     <input
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        placeholder={t('destinationSearchPlaceholder')}
+                        placeholder="Rechercher un pays, une ville ou un code..."
                         className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:border-[#3D8BF0]"
                     />
                 </div>
@@ -136,12 +140,12 @@ export default function AllDestinationsModal({ open, onClose, onSelect }: Props)
                 {loading && (
                     <div className="flex-1 flex items-center justify-center gap-2 text-slate-500 py-16">
                         <Loader2 className="w-5 h-5 animate-spin" />
-                        {t('destinationLoading')}
+                        Chargement des destinations...
                     </div>
                 )}
 
                 {error && (
-                    <div className="flex-1 text-red-600 text-sm py-8 text-center">{t('destinationError')} {error}</div>
+                    <div className="flex-1 text-red-600 text-sm py-8 text-center">Erreur: {error}</div>
                 )}
 
                 {!loading && !error && (
@@ -149,7 +153,7 @@ export default function AllDestinationsModal({ open, onClose, onSelect }: Props)
                         {/* Column 1: countries */}
                         <div className="w-1/2 border-r border-slate-100 flex flex-col min-h-0">
                             <div className="px-5 py-2 text-xs font-semibold text-slate-500 shrink-0">
-                                🌐 {t('destinationCountries')} ({filteredCountries.length})
+                                🌐 Pays ({filteredCountries.length})
                             </div>
                             <div className="flex-1 overflow-y-auto">
                                 {filteredCountries.map((country) => (
@@ -174,11 +178,11 @@ export default function AllDestinationsModal({ open, onClose, onSelect }: Props)
 
                         {/* Column 2: airports for the selected country — opens on click, like TK's picker */}
                         <div className="px-5 py-2 text-xs font-semibold text-slate-500 shrink-0">
-                            ✈️ {t('destinationAirports')} ({filteredAirportsForSelected.length})
+                            ✈️ Aéroports ({filteredAirportsForSelected.length})
                         </div>
                         <div className="flex-1 overflow-y-auto px-2 pb-4">
                             {!selectedCountry && (
-                                <div className="text-slate-400 text-sm px-3 py-6">{t('destinationChooseCountry')}</div>
+                                <div className="text-slate-400 text-sm px-3 py-6">Sélectionnez un pays à gauche.</div>
                             )}
                             {filteredAirportsForSelected.map((airport) => (
                                 <button

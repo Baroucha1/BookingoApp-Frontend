@@ -6,8 +6,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { getApplicationsByClient } from '../../service/visaApplication.service';
 import { searchBookings, type BookingListItem } from '../../service/flights/searchBookings.service';
-import { useLanguage } from '@/i18n/LanguageContext';
-import type { TranslationKey } from '@/i18n/translations';
+import AppLoading from '@/components/common/AppLoading';
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -22,28 +21,27 @@ const STATUS_COLOR: Record<string, string> = {
   CANCELLED: 'bg-gray-50 text-gray-600 border-gray-200',
 };
 
-const STATUS_LABEL: Record<string, TranslationKey> = {
-  PENDING: 'clientStatusPending',
-  UNDER_REVIEW: 'clientStatusUnderReview',
-  APPROVED: 'clientStatusApproved',
-  CONFIRMED: 'clientStatusConfirmed',
-  TICKETED: 'clientStatusConfirmed',
-  ACTIVE: 'clientStatusActive',
-  REJECTED: 'clientStatusRejected',
-  CANCELLED: 'clientStatusCancelled',
+const STATUS_LABEL: Record<string, string> = {
+  PENDING: 'En attente',
+  UNDER_REVIEW: 'En cours',
+  APPROVED: 'Approuvé',
+  CONFIRMED: 'Confirmé',
+  TICKETED: 'Confirmé',
+  ACTIVE: 'Active',
+  REJECTED: 'Rejeté',
+  CANCELLED: 'Annulé',
 };
 
-const formatDate = (iso?: string, locale = 'fr-FR') => {
+const formatDate = (iso?: string) => {
   if (!iso) return '—';
   try {
-    return new Date(iso).toLocaleDateString(locale, { day: '2-digit', month: 'short', year: 'numeric' });
+    return new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
   } catch {
     return iso;
   }
 };
 
 const ClientDashboard = () => {
-  const { t, language } = useLanguage();
   const { user } = useAuth();
   const [apps, setApps] = useState<any[]>([]);
   const [esims, setEsims] = useState<any[]>([]);
@@ -76,14 +74,21 @@ const ClientDashboard = () => {
   }, [user]);
 
   const firstName = user?.firstName ?? user?.email?.split('@')[0] ?? '';
-  const dateLocale = language === 'ar' ? 'ar-DZ' : language === 'en' ? 'en-US' : 'fr-FR';
 
   const stats = [
-    { labelKey: 'clientStatFlights', subKey: 'clientStatBookings', value: flights.length, icon: Plane, bg: 'bg-blue-50', color: 'text-blue-600', to: '/client/flights' },
-    { labelKey: 'clientStatVisaRequests', subKey: 'clientStatInProgress', value: apps.filter(a => a.status === 'PENDING' || a.status === 'UNDER_REVIEW').length, icon: FileCheck2, bg: 'bg-red-50', color: 'text-red-500', to: '/client/applications' },
-    { labelKey: 'clientStatEsim', subKey: 'clientStatActive', value: esims.length, icon: Wifi, bg: 'bg-purple-50', color: 'text-purple-600', to: '/client/esim' },
-    { labelKey: 'clientStatHotels', subKey: 'clientComingSoon', value: '—', icon: Building2, bg: 'bg-amber-50', color: 'text-amber-600', to: '#', disabled: true },
+    { label: 'Mes vols', sub: 'Réservations', value: flights.length, icon: Plane, bg: 'bg-blue-50', color: 'text-blue-600', to: '/client/flights' },
+    { label: 'Demandes visas', sub: 'En cours', value: apps.filter(a => a.status === 'PENDING' || a.status === 'UNDER_REVIEW').length, icon: FileCheck2, bg: 'bg-red-50', color: 'text-red-500', to: '/client/applications' },
+    { label: 'Mes eSIM', sub: 'Active', value: esims.length, icon: Wifi, bg: 'bg-purple-50', color: 'text-purple-600', to: '/client/esim' },
+    { label: 'Mes hôtels', sub: 'Bientôt disponible', value: '—', icon: Building2, bg: 'bg-amber-50', color: 'text-amber-600', to: '#', disabled: true },
   ];
+
+  if (loading) {
+    return (
+      <div className="py-20 flex items-center justify-center">
+        <AppLoading fullScreen={false} message="Chargement de votre espace voyageur..." />
+      </div>
+    );
+  }
 
   return (
       <div className="space-y-6">
@@ -93,9 +98,9 @@ const ClientDashboard = () => {
           <img src="/hero-bg.jpg" alt="" className="absolute inset-0 w-full h-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-r from-white via-white/70 to-transparent" />
           <div className="relative z-10 max-w-md">
-            <p className="text-2xl font-bold text-gray-900">{t('clientGreeting')} {firstName || '...'} 👋</p>
-            <p className="text-lg font-semibold text-gray-800 mt-1">{t('clientWelcome')}</p>
-            <p className="text-sm text-gray-500 mt-2">{t('clientDashboardDescription')}</p>
+            <p className="text-2xl font-bold text-gray-900">Bonjour, {firstName || '...'} 👋</p>
+            <p className="text-lg font-semibold text-gray-800 mt-1">Prête pour votre prochaine aventure ?</p>
+            <p className="text-sm text-gray-500 mt-2">Gérez vos réservations et demandes en toute simplicité.</p>
           </div>
         </div>
 
@@ -112,11 +117,11 @@ const ClientDashboard = () => {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
-                        <p className="text-sm text-gray-500">{t(s.labelKey)}</p>
+                        <p className="text-sm text-gray-500">{s.label}</p>
                         <Lock className="w-3.5 h-3.5 text-gray-300" />
                       </div>
                       <p className="text-2xl font-bold text-gray-400 mt-0.5">{s.value}</p>
-                      <p className="text-xs text-gray-400">{t(s.subKey)}</p>
+                      <p className="text-xs text-gray-400">{s.sub}</p>
                     </div>
                   </div>
               ) : (
@@ -130,11 +135,11 @@ const ClientDashboard = () => {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
-                        <p className="text-sm text-gray-500">{t(s.labelKey)}</p>
+                        <p className="text-sm text-gray-500">{s.label}</p>
                         <ChevronRight className="w-4 h-4 text-gray-300" />
                       </div>
                       <p className="text-2xl font-bold text-gray-900 mt-0.5">{loading ? '–' : s.value}</p>
-                      <p className="text-xs text-gray-400">{t(s.subKey)}</p>
+                      <p className="text-xs text-gray-400">{s.sub}</p>
                     </div>
                   </Link>
               )
@@ -146,9 +151,9 @@ const ClientDashboard = () => {
           {/* Réservations récentes */}
           <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 p-6">
             <div className="flex items-center justify-between mb-4">
-              <p className="font-semibold text-gray-900">{t('clientRecentBookings')}</p>
+              <p className="font-semibold text-gray-900">Mes réservations récentes</p>
               <Link to="/client/flights" className="text-sm text-blue-600 font-medium hover:underline">
-                {t('clientViewAll')}
+                Voir tout
               </Link>
             </div>
 
@@ -158,25 +163,25 @@ const ClientDashboard = () => {
                     value="flights"
                     className="data-[state=active]:border-b-2 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600 rounded-none pb-3 px-0 gap-1.5 text-gray-500"
                 >
-                  <Plane className="w-4 h-4" /> {t('clientTabFlights')}
+                  <Plane className="w-4 h-4" /> Vols
                 </TabsTrigger>
                 <TabsTrigger
                     value="hotels"
                     className="data-[state=active]:border-b-2 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600 rounded-none pb-3 px-0 gap-1.5 text-gray-500"
                 >
-                  <Building2 className="w-4 h-4" /> {t('clientTabHotels')}
+                  <Building2 className="w-4 h-4" /> Hôtels
                 </TabsTrigger>
                 <TabsTrigger
                     value="esim"
                     className="data-[state=active]:border-b-2 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600 rounded-none pb-3 px-0 gap-1.5 text-gray-500"
                 >
-                  <Wifi className="w-4 h-4" /> {t('clientTabEsim')}
+                  <Wifi className="w-4 h-4" /> eSIM
                 </TabsTrigger>
               </TabsList>
 
               <TabsContent value="flights" className="space-y-3">
                 {!loading && flights.length === 0 && (
-                    <p className="text-sm text-gray-400 text-center py-6">{t('clientNoFlightBookings')}</p>
+                    <p className="text-sm text-gray-400 text-center py-6">Aucune réservation de vol.</p>
                 )}
                 {flights.slice(0, 3).map(f => (
                     <Link
@@ -189,11 +194,11 @@ const ClientDashboard = () => {
                       </div>
                       <div className="flex-1 min-w-0">
                         <Badge variant="outline" className={`mb-1 text-xs font-normal ${STATUS_COLOR[f.status ?? ''] ?? 'bg-gray-50 text-gray-600 border-gray-200'}`}>
-                          {f.status ? t(STATUS_LABEL[f.status] ?? 'clientStatusUnknown') : '—'}
+                          {STATUS_LABEL[f.status ?? ''] ?? f.status ?? '—'}
                         </Badge>
                         <p className="font-medium text-gray-900 truncate">{f.departureAirport} → {f.arrivalAirport}</p>
                         <p className="text-xs text-gray-400">
-                          {formatDate(f.departureDate, dateLocale)} · {f.passengers?.length ?? 1} {t((f.passengers?.length ?? 1) === 1 ? 'clientPassenger' : 'clientPassengers')}
+                          {formatDate(f.departureDate)} · {f.passengers?.length ?? 1} passager
                         </p>
                       </div>
                       <div className="text-right shrink-0 flex items-center gap-2">
@@ -209,13 +214,13 @@ const ClientDashboard = () => {
               <TabsContent value="hotels" className="space-y-3">
                 <div className="text-center py-8">
                   <Building2 className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                  <p className="text-sm text-gray-400">{t('clientHotelModuleComingSoon')}</p>
+                  <p className="text-sm text-gray-400">Le module Hôtels arrive bientôt.</p>
                 </div>
               </TabsContent>
 
               <TabsContent value="esim" className="space-y-3">
                 {!loading && esims.length === 0 && (
-                    <p className="text-sm text-gray-400 text-center py-6">{t('clientNoEsim')}</p>
+                    <p className="text-sm text-gray-400 text-center py-6">Aucune eSIM achetée.</p>
                 )}
                 {esims.slice(0, 3).map(esim => (
                     <Link
@@ -228,7 +233,7 @@ const ClientDashboard = () => {
                       </div>
                       <div className="flex-1 min-w-0">
                         <Badge variant="outline" className={`mb-1 text-xs font-normal ${STATUS_COLOR[esim.status] ?? 'bg-gray-50 text-gray-600 border-gray-200'}`}>
-                          {t(STATUS_LABEL[esim.status] ?? 'clientStatusUnknown')}
+                          {STATUS_LABEL[esim.status] ?? esim.status}
                         </Badge>
                         <p className="font-medium text-gray-900 truncate">{esim.locationName}</p>
                         <p className="text-xs text-gray-400">
@@ -244,7 +249,7 @@ const ClientDashboard = () => {
             </Tabs>
 
             <Link to="/client/flights" className="text-sm text-blue-600 font-medium hover:underline mt-3 inline-block">
-              {t('clientAllFlightBookings')}
+              Voir toutes mes réservations de vol
             </Link>
           </div>
 
@@ -254,15 +259,15 @@ const ClientDashboard = () => {
             {/* Demandes récentes */}
             <div className="bg-white rounded-2xl border border-gray-100 p-6">
               <div className="flex items-center justify-between mb-4">
-                <p className="font-semibold text-gray-900">{t('clientRecentRequests')}</p>
+                <p className="font-semibold text-gray-900">Mes demandes récentes</p>
                 <Link to="/client/applications" className="text-sm text-blue-600 font-medium hover:underline">
-                  {t('clientViewAll')}
+                  Voir tout
                 </Link>
               </div>
 
               <div className="space-y-1">
                 {apps.length === 0 && !loading && (
-                    <p className="text-sm text-gray-400 text-center py-6">{t('clientNoRequests')}</p>
+                    <p className="text-sm text-gray-400 text-center py-6">Aucune demande.</p>
                 )}
                 {apps.slice(0, 2).map(app => (
                     <Link
@@ -276,13 +281,13 @@ const ClientDashboard = () => {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <p className="font-medium text-sm text-gray-900 truncate">
-                            {t('clientVisaPrefix')} {app.visaType?.country?.nameFr}
+                            Visa {app.visaType?.country?.nameFr}
                           </p>
                           <Badge variant="outline" className={`text-[10px] font-normal ${STATUS_COLOR[app.status]}`}>
                             {STATUS_LABEL[app.status]}
                           </Badge>
                         </div>
-                        <p className="text-xs text-gray-400">{t('clientSubmittedOn')} {formatDate(app.submittedAt ?? app.createdAt, dateLocale)}</p>
+                        <p className="text-xs text-gray-400">Soumise le {formatDate(app.submittedAt ?? app.createdAt)}</p>
                       </div>
                       <ChevronRight className="w-4 h-4 text-gray-300 shrink-0" />
                     </Link>
@@ -298,12 +303,12 @@ const ClientDashboard = () => {
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <p className="font-medium text-sm text-gray-900 truncate">{t('clientEsimPrefix')} {esim.locationName}</p>
+                          <p className="font-medium text-sm text-gray-900 truncate">eSIM {esim.locationName}</p>
                           <Badge variant="outline" className={`text-[10px] font-normal ${STATUS_COLOR[esim.status] ?? ''}`}>
-                            {t(STATUS_LABEL[esim.status] ?? 'clientStatusUnknown')}
+                            {STATUS_LABEL[esim.status] ?? esim.status}
                           </Badge>
                         </div>
-                        <p className="text-xs text-gray-400">{t('clientValidUntil')} {formatDate(esim.expiresAt, dateLocale)}</p>
+                        <p className="text-xs text-gray-400">Valide jusqu'au {formatDate(esim.expiresAt)}</p>
                       </div>
                       <ChevronRight className="w-4 h-4 text-gray-300 shrink-0" />
                     </Link>
@@ -313,10 +318,10 @@ const ClientDashboard = () => {
 
             {/* Bannière promo */}
             <div className="rounded-2xl overflow-hidden relative p-6 text-white bg-gradient-to-br from-blue-600 to-blue-500">
-              <p className="font-semibold text-lg">{t('clientTravelPromoTitle')}</p>
-              <p className="text-sm opacity-90 mt-1 max-w-[180px]">{t('clientTravelPromoDescription')}</p>
+              <p className="font-semibold text-lg">Partez l'esprit léger</p>
+              <p className="text-sm opacity-90 mt-1 max-w-[180px]">Gérez tous vos voyages au même endroit</p>
               <button className="mt-4 flex items-center gap-1.5 bg-white text-blue-600 text-sm font-medium rounded-lg px-4 py-2 hover:bg-white/90 transition-colors">
-                <Gift className="w-3.5 h-3.5" /> {t('clientDiscoverOffers')}
+                <Gift className="w-3.5 h-3.5" /> Découvrir nos offres
               </button>
               <Luggage className="w-20 h-20 absolute -bottom-4 -right-4 opacity-20" />
             </div>

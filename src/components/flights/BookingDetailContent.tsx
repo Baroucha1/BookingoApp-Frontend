@@ -159,7 +159,13 @@ export default function BookingDetailContent({ pnr, refId, onClose, onChanged }:
                 {payment?.method && (
                     <div className="flex justify-between items-center p-3 border-b border-slate-100">
                       <span className="text-slate-500">Méthode</span>
-                      <span className="font-medium text-[#0B0F2E]">{payment.method}</span>
+                      <span className="font-medium text-[#0B0F2E]">
+                        {payment.method === 'DELIVERY' || payment.method === 'delivery'
+                          ? 'Livraison à domicile'
+                          : payment.method === 'CASH' || payment.method === 'agence'
+                          ? 'Paiement en agence'
+                          : payment.method}
+                      </span>
                     </div>
                 )}
                 {payment?.status && (
@@ -178,6 +184,25 @@ export default function BookingDetailContent({ pnr, refId, onClose, onChanged }:
                     <div className="flex justify-between items-center p-3 border-b border-slate-100">
                       <span className="text-slate-500">Payé le</span>
                       <span className="text-[#0B0F2E]">{new Date(payment.paidAt).toLocaleDateString('fr-DZ')}</span>
+                    </div>
+                )}
+                {(data as any).office && (
+                    <div className="flex justify-between items-center p-3 border-b border-slate-100">
+                      <span className="text-slate-500">Agence de paiement</span>
+                      <span className="font-medium text-[#0B0F2E]">
+                        {(data as any).office.name} ({(data as any).office.wilaya})
+                      </span>
+                    </div>
+                )}
+                {((data as any).deliveryAddress || (data as any).deliveryPhone) && (
+                    <div className="p-3 border-b border-slate-100 space-y-1 text-xs">
+                      <span className="text-slate-500 font-semibold block">Livraison de billet</span>
+                      <div className="text-[#0B0F2E]">
+                        {(data as any).deliveryAddress}, {(data as any).deliveryCity} ({(data as any).deliveryWilaya})
+                      </div>
+                      {(data as any).deliveryPhone && (
+                        <div className="text-slate-500">Tél: {(data as any).deliveryPhone}</div>
+                      )}
                     </div>
                 )}
                 <div className="flex justify-between items-center p-3 bg-slate-50">

@@ -1,13 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Eye, FileText, CheckCircle2, Clock, AlertCircle,
-  XCircle, Plane, ExternalLink, Upload, Loader2,
+  XCircle, Plane, ExternalLink, Upload, Loader2, ChevronRight,
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -15,8 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { VisaApplication, VisaTypeDocumentRequirement, Passenger, ApplicationStatus, PaymentStatus } from '@/lib/types';
 import { getApplicationsByClient } from '@/service/visaApplication.service.ts';
 import { initiateSatimPayment } from '@/service/payment.service';
-import { useLanguage } from '@/i18n/LanguageContext';
-import type { TranslationKey } from '@/i18n/translations';
+import AppLoading from '@/components/common/AppLoading';
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -31,12 +28,12 @@ type ApplyDraft = {
   passengers:    any[];
 };
 
-const APP_STATUS_LABEL: Record<ApplicationStatus, TranslationKey> = {
-  PENDING:      'clientStatusPending',
-  UNDER_REVIEW: 'clientStatusUnderReview',
-  APPROVED:     'approved',
-  REJECTED:     'rejected',
-  CANCELLED:    'clientStatusCancelled',
+const APP_STATUS_LABEL: Record<ApplicationStatus, string> = {
+  PENDING:      'En attente',
+  UNDER_REVIEW: 'En cours',
+  APPROVED:     'Approuvé',
+  REJECTED:     'Rejeté',
+  CANCELLED:    'Annulé',
 };
 const APP_STATUS_COLOR: Record<ApplicationStatus, string> = {
   PENDING:      'bg-yellow-100 text-yellow-800 border-yellow-300',
@@ -51,18 +48,8 @@ const PAYMENT_STATUS_COLOR: Record<PaymentStatus, string> = {
   FAILED:   'bg-red-100    text-red-800    border-red-300',
   REFUNDED: 'bg-orange-100 text-orange-800 border-orange-300',
 };
-const PAYMENT_STATUS_LABEL: Record<PaymentStatus, TranslationKey> = {
-  PENDING: 'clientStatusPending',
-  PAID: 'paid',
-  FAILED: 'clientAppsPaymentFailed',
-  REFUNDED: 'clientAppsRefunded',
-};
-
-const PAYMENT_METHOD_LABEL: Record<string, TranslationKey> = {
-  STRIPE: 'clientAppsMethodStripe',
-  SATIM: 'clientAppsMethodSatim',
-  BANK_TRANSFER: 'clientAppsMethodBankTransfer',
-  CASH: 'clientAppsMethodCash',
+const PAYMENT_STATUS_LABEL: Record<PaymentStatus, string> = {
+  PENDING: 'En attente', PAID: 'Payé', FAILED: 'Échoué', REFUNDED: 'Remboursé',
 };
 
 // ── Document row with upload / replace ───────────────────────────────────────
@@ -76,14 +63,14 @@ const DocRow = ({
   onUploaded: (passengerId: string, requirementId: string, doc: any) => void;
 }) => {
 
-  const { t, language } = useLanguage();
   const { toast }  = useToast();
   const inputRef   = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
 
 
   const uploaded = passenger.documents.find(d => d.requirementId === req.id);
-  const canEdit = app.status === 'PENDING';
+  // Only allow upload/replace if application is not yet approved
+  const canEdit = !(['APPROVED', 'CANCELLED'] as ApplicationStatus[]).includes(app.status);
 
   const handleFile = async (file: File) => {
     if (!file) return;
@@ -98,11 +85,11 @@ const DocRow = ({
           { method: 'PATCH', headers: { Authorization: `Bearer ${token}` }, body: formData },
       );
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message ?? t('clientAppsUploadError'));
+      if (!res.ok) throw new Error(data.message ?? 'Erreur upload');
       onUploaded(passenger.id, req.id, data.data);
-      toast({ title: uploaded ? t('clientAppsDocumentReplaced') : t('clientAppsDocumentUploaded'), description: file.name });
+      toast({ title: uploaded ? 'Document remplacé' : 'Document uploadé', description: file.name });
     } catch (err: any) {
-      toast({ title: t('profileError'), description: err.message, variant: 'destructive' });
+      toast({ title: 'Erreur', description: err.message, variant: 'destructive' });
     } finally {
       setUploading(false);
     }
@@ -130,8 +117,8 @@ const DocRow = ({
         {/* Label + passenger */}
         <div className="flex-1 min-w-0">
           <p className="font-medium truncate">
-            {language === 'en' ? req.documentType.labelEn : language === 'ar' ? req.documentType.labelAr : req.documentType.labelFr}
-            {!req.isRequired && <span className="ml-1 text-xs text-muted-foreground">{t('clientAppsOptional')}</span>}
+            {req.documentType.labelFr}
+            {!req.isRequired && <span className="ml-1 text-xs text-muted-foreground">(optionnel)</span>}
           </p>
           <p className="text-xs text-muted-foreground truncate">
             {passenger.firstName} {passenger.lastName}
@@ -142,8 +129,8 @@ const DocRow = ({
         {/* Verification badge */}
         {uploaded && (
             uploaded.isVerified
-                ? <span className="text-xs font-medium text-green-700 bg-green-100 px-2 py-0.5 rounded-full shrink-0">{t('clientAppsVerified')}</span>
-                : <Clock className="w-4 h-4 text-muted-foreground shrink-0" title={t('clientAppsPendingVerification')} />
+                ? <span className="text-xs font-medium text-green-700 bg-green-100 px-2 py-0.5 rounded-full shrink-0">Vérifié</span>
+                : <Clock className="w-4 h-4 text-muted-foreground shrink-0" title="En attente de vérification" />
         )}
 
         {/* View link */}
@@ -164,8 +151,8 @@ const DocRow = ({
                 style={!uploaded ? { background: 'linear-gradient(135deg, #0865FE, #3B2F7E)', color: '#fff' } : undefined}
             >
               {uploading
-                  ? <><Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> {t('clientAppsUploading')}</>
-                  : <><Upload className="w-3.5 h-3.5 mr-1" />{uploaded ? t('clientAppsReplace') : t('clientAppsUpload')}</>}
+                  ? <><Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> Envoi...</>
+                  : <><Upload className="w-3.5 h-3.5 mr-1" />{uploaded ? 'Remplacer' : 'Uploader'}</>}
             </Button>
         )}
       </div>
@@ -174,7 +161,6 @@ const DocRow = ({
 
 // ── Main component ────────────────────────────────────────────────────────────
 const ClientApplications = () => {
-  const { t, language } = useLanguage();
   const { user } = useAuth();
   const [selected, setSelected]         = useState<VisaApplication | null>(null);
   const [loading, setLoading]           = useState(true);
@@ -188,7 +174,6 @@ const ClientApplications = () => {
   const [submitting, setSubmitting]           = useState(false);
   const recaptchaRef                          = useRef<HTMLDivElement>(null);
   const recaptchaWidgetId                     = useRef<number | null>(null);
-  const dateLocale = language === 'ar' ? 'ar-DZ' : language === 'en' ? 'en-US' : 'fr-FR';
 
   const [payingId, setPayingId] = useState<string | null>(null);
 
@@ -276,13 +261,13 @@ const ClientApplications = () => {
     try {
       const captchaToken = window.grecaptcha.getResponse(recaptchaWidgetId.current);
       if (!captchaToken) {
-        toast({ title: t('clientAppsRecaptchaRequired'), description: t('clientAppsRecaptchaDescription'), variant: 'destructive' });
+        toast({ title: 'reCAPTCHA requis', description: 'Veuillez valider le reCAPTCHA.', variant: 'destructive' });
         return;
       }
       const { formUrl } = await initiateSatimPayment(captchaModal, captchaToken);
       window.location.href = formUrl;
     } catch (err: any) {
-      toast({ title: t('clientAppsPaymentError'), description: err.message, variant: 'destructive' });
+      toast({ title: 'Erreur paiement', description: err.message, variant: 'destructive' });
     } finally {
       setSubmitting(false);
     }
@@ -292,151 +277,202 @@ const ClientApplications = () => {
         {error && <div className="text-center py-8 text-destructive text-sm">{error}</div>}
 
         <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">{t('clientAppsDescription')}</p>
+          <p className="text-sm text-muted-foreground">Suivez l'état de toutes vos demandes de visa.</p>
           <Button asChild className="bg-gradient-primary">
-            <Link to="/apply"><Plane className="w-4 h-4 mr-2" /> {t('clientAppsNewApplication')}</Link>
+            <Link to="/apply"><Plane className="w-4 h-4 mr-2" /> Nouvelle demande</Link>
           </Button>
         </div>
 
-        <Card>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t('clientAppsReference')}</TableHead>
-                  <TableHead>{t('clientAppsCountry')}</TableHead>
-                  <TableHead>{t('clientAppsVisa')}</TableHead>
-                  <TableHead>{t('clientAppsTravelers')}</TableHead>
-                  <TableHead>{t('clientAppsDate')}</TableHead>
-                  <TableHead>{t('clientAppsApplicationStatus')}</TableHead>
-                  <TableHead>{t('clientAppsPaymentStatus')}</TableHead>
-                  <TableHead className="w-20" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {/* Draft row */}
-                {draft && (
-                    <TableRow className="bg-amber-50 hover:bg-amber-100 border-l-4 border-l-amber-400">
-                      <TableCell className="font-mono text-xs text-muted-foreground italic">{t('clientAppsDraft')}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <img
-                              src={`https://flagcdn.com/w40/${draft.countryCode}.png`}
-                              alt=""
-                              className="w-6 h-6 rounded-full object-cover"
-                          />
-                          <span className="uppercase text-sm font-medium">{draft.countryCode}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground italic">—</TableCell>
-                      <TableCell>{draft.numberOfPeople}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {draft.startDate || '—'}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300 font-semibold">
-                          {t('clientAppsDraft')}
+        {/* Cards Grid */}
+        <div className="space-y-4">
+          {/* Loading Skeletons */}
+          {loading && (
+            <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 py-12">
+              <AppLoading
+                fullScreen={false}
+                message="Chargement de vos demandes de visa..."
+                subMessage="Récupération de vos dossiers en cours..."
+              />
+            </div>
+          )}
+
+          {/* Empty State */}
+          {!loading && applications.length === 0 && !draft && (
+            <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 p-8 text-center space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 flex items-center justify-center mx-auto">
+                <FileText className="w-6 h-6" />
+              </div>
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100">Aucune demande de visa</h3>
+              <p className="text-xs sm:text-sm text-gray-500 max-w-sm mx-auto">
+                Vous n'avez pas encore de dossier de visa. Initiez votre première demande dès maintenant.
+              </p>
+              <Button asChild className="rounded-xl mt-2">
+                <Link to="/apply">
+                  <Plane className="w-4 h-4 mr-2" /> Déposer une demande
+                </Link>
+              </Button>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Draft card */}
+            {draft && (
+              <div className="bg-amber-50/70 dark:bg-amber-950/30 rounded-2xl border-2 border-dashed border-amber-300 dark:border-amber-700 p-5 shadow-xs flex flex-col justify-between gap-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={`https://flagcdn.com/w80/${draft.countryCode.toLowerCase()}.png`}
+                      alt=""
+                      className="w-11 h-11 rounded-xl object-cover shadow-xs border border-amber-200"
+                    />
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-bold text-base text-gray-900 dark:text-gray-100 uppercase">
+                          {draft.countryCode}
+                        </h3>
+                        <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300 text-[10px] font-bold uppercase">
+                          Brouillon
                         </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <span className="text-xs text-muted-foreground">—</span>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          <Button
-                              size="sm"
-                              className="text-white text-xs"
-                              style={{ background: 'linear-gradient(135deg, #0865FE, #3B2F7E)' }}
-                              onClick={() => navigate(`/apply?country=${draft.countryCode}`)}
-                          >
-                            {t('clientAppsContinue')}
-                          </Button>
-                          <Button
-                              size="icon"
-                              variant="ghost"
-                              className="w-7 h-7 text-muted-foreground hover:text-destructive"
-                              title={t('clientAppsDiscardDraft')}
-                              onClick={discardDraft}
-                          >
-                            <XCircle className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                )}
+                      </div>
+                      <p className="text-xs text-amber-800/80 dark:text-amber-300">
+                        Demande non finalisée
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="w-8 h-8 text-gray-400 hover:text-red-500 rounded-full"
+                    title="Supprimer le brouillon"
+                    onClick={discardDraft}
+                  >
+                    <XCircle className="w-5 h-5" />
+                  </Button>
+                </div>
 
-                {/* Real applications */}
-                {loading && (
-                    <TableRow>
-                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">{t('clientAppsLoading')}</TableCell>
-                    </TableRow>
-                )}
-                {!loading && applications.length === 0 && !draft && (
-                    <TableRow>
-                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">{t('clientAppsEmpty')}</TableCell>
-                    </TableRow>
-                )}
-                {applications.map(app => (
-                    <TableRow key={app.id} className="cursor-pointer hover:bg-muted/40" onClick={() => setSelected(app)}>
-                      <TableCell className="font-mono text-xs">{app.id.slice(0, 8).toUpperCase()}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <img src={`https://flagcdn.com/w40/${app.visaType.country.code.toLowerCase()}.png`} alt="" className="w-6 h-6 rounded-full object-cover" />
-                              {language === 'en' ? app.visaType.country.nameEn : language === 'ar' ? app.visaType.country.nameAr : app.visaType.country.nameFr}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        <div>{language === 'en' ? app.visaType.nameEn : language === 'ar' ? app.visaType.nameAr : app.visaType.nameFr}</div>
-                        {app.office && (
-                          <div className="mt-0.5 text-xs text-muted-foreground">
-                            {t('clientAppsOffice')}: {app.office.name} · {app.office.wilaya}
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell>{app.numberOfPeople}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{new Date(app.createdAt).toLocaleDateString(dateLocale)}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={APP_STATUS_COLOR[app.status]}>{t(APP_STATUS_LABEL[app.status])}</Badge>
-                      </TableCell>
+                <div className="grid grid-cols-2 gap-2 py-2 px-3 rounded-xl bg-amber-100/50 dark:bg-amber-900/30 text-xs">
+                  <div>
+                    <span className="text-amber-800/60 dark:text-amber-400 block text-[10px] uppercase font-medium">Voyageurs</span>
+                    <span className="font-semibold text-gray-800 dark:text-gray-200">{draft.numberOfPeople} personne(s)</span>
+                  </div>
+                  <div>
+                    <span className="text-amber-800/60 dark:text-amber-400 block text-[10px] uppercase font-medium">Date prévue</span>
+                    <span className="font-semibold text-gray-800 dark:text-gray-200">{draft.startDate || 'Non renseignée'}</span>
+                  </div>
+                </div>
 
-                      <TableCell onClick={e => e.stopPropagation()}>
-                        {app.payment?.status === 'PAID' && (
-                            <Badge variant="outline" className={PAYMENT_STATUS_COLOR['PAID']}>
-                              {t(PAYMENT_STATUS_LABEL['PAID'])}
-                            </Badge>
-                        )}
-                        {app.payment?.status === 'REFUNDED' && (
-                            <Badge variant="outline" className={PAYMENT_STATUS_COLOR['REFUNDED']}>
-                              {t(PAYMENT_STATUS_LABEL['REFUNDED'])}
-                            </Badge>
-                        )}
-                        {app.payment?.status === 'FAILED' && (
-                            <Button size="sm" variant="outline"
-                                    onClick={() => handlePayNow(app.id)}
-                                    className="text-xs border-red-300 text-red-600 hover:bg-red-50 h-7 rounded-full">
-                              {t('clientAppsRetry')}
-                            </Button>
-                        )}
-                        {(!app.payment || app.payment?.status === 'PENDING') && !['CANCELLED', 'REJECTED'].includes(app.status) && (
-                            <Button size="sm" variant="outline"
-                                    onClick={() => handlePayNow(app.id)}
-                                    className="text-xs border-yellow-400 text-yellow-700 hover:bg-yellow-50 h-7 rounded-full">
-                              {t('clientAppsPay')}
-                            </Button>
-                        )}
-                        {!app.payment && ['CANCELLED', 'REJECTED'].includes(app.status) && (
-                            <span className="text-xs text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Button variant="ghost" size="icon" aria-label={t('clientAppsDetails')}><Eye className="w-4 h-4" /></Button>
-                      </TableCell>
-                    </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+                <div className="flex items-center justify-between pt-2 border-t border-amber-200/60 dark:border-amber-800/60 gap-2">
+                  <span className="text-xs text-amber-700 dark:text-amber-300 font-medium truncate">
+                    Reprendre votre saisie
+                  </span>
+                  <Button
+                    size="sm"
+                    className="text-white text-xs font-semibold rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-xs shrink-0"
+                    onClick={() => navigate(`/apply?country=${draft.countryCode}`)}
+                  >
+                    Continuer
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Applications cards */}
+            {applications.map(app => (
+              <div
+                key={app.id}
+                onClick={() => setSelected(app)}
+                className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 p-5 shadow-xs hover:shadow-md hover:border-blue-200 dark:hover:border-blue-800 transition-all cursor-pointer flex flex-col justify-between gap-4 group"
+              >
+                {/* Header: Flag + Country/Visa + Status */}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <img
+                      src={`https://flagcdn.com/w80/${app.visaType.country.code.toLowerCase()}.png`}
+                      alt={app.visaType.country.nameFr}
+                      className="w-11 h-11 rounded-xl object-cover shadow-xs border border-gray-100 dark:border-gray-800 shrink-0"
+                    />
+                    <div className="min-w-0">
+                      <h3 className="font-bold text-base text-gray-900 dark:text-gray-100 truncate group-hover:text-blue-600 transition-colors">
+                        {app.visaType.country.nameFr}
+                      </h3>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                        {app.visaType.nameFr}
+                      </p>
+                    </div>
+                  </div>
+                  <Badge variant="outline" className={`shrink-0 text-xs font-semibold rounded-full px-2.5 py-0.5 ${APP_STATUS_COLOR[app.status]}`}>
+                    {APP_STATUS_LABEL[app.status]}
+                  </Badge>
+                </div>
+
+                {/* Details Matrix */}
+                <div className="grid grid-cols-3 gap-2 py-2 px-3 rounded-xl bg-gray-50/80 dark:bg-gray-800/50 text-xs">
+                  <div>
+                    <span className="text-gray-400 block text-[10px] uppercase font-medium">Référence</span>
+                    <span className="font-mono font-semibold text-gray-700 dark:text-gray-200">
+                      #{app.id.slice(0, 8).toUpperCase()}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-400 block text-[10px] uppercase font-medium">Voyageurs</span>
+                    <span className="font-semibold text-gray-700 dark:text-gray-200">
+                      {app.numberOfPeople} {app.numberOfPeople > 1 ? 'personnes' : 'personne'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-400 block text-[10px] uppercase font-medium">Date dépôt</span>
+                    <span className="font-semibold text-gray-700 dark:text-gray-200">
+                      {new Date(app.createdAt).toLocaleDateString('fr-FR')}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Footer: Payment status & Action */}
+                <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-800 gap-2">
+                  <div onClick={e => e.stopPropagation()}>
+                    {app.payment?.status === 'PAID' && (
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-full px-2.5 py-1">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> Payé
+                      </span>
+                    )}
+                    {app.payment?.status === 'REFUNDED' && (
+                      <Badge variant="outline" className={PAYMENT_STATUS_COLOR['REFUNDED']}>
+                        {PAYMENT_STATUS_LABEL['REFUNDED']}
+                      </Badge>
+                    )}
+                    {app.payment?.status === 'FAILED' && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handlePayNow(app.id)}
+                        className="text-xs border-red-300 text-red-600 hover:bg-red-50 h-8 rounded-xl font-medium"
+                      >
+                        Réessayer
+                      </Button>
+                    )}
+                    {(!app.payment || app.payment?.status === 'PENDING') && !['CANCELLED', 'REJECTED'].includes(app.status) && (
+                      <Button
+                        size="sm"
+                        onClick={() => handlePayNow(app.id)}
+                        className="text-xs text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 h-8 rounded-xl font-semibold shadow-xs"
+                      >
+                        Payer maintenant
+                      </Button>
+                    )}
+                    {!app.payment && ['CANCELLED', 'REJECTED'].includes(app.status) && (
+                      <span className="text-xs text-gray-400">—</span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1 text-xs font-semibold text-blue-600 dark:text-blue-400 group-hover:translate-x-0.5 transition-transform">
+                    <span>Détails & Documents</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
 
         {/* Detail dialog */}
         <Dialog open={!!selected} onOpenChange={() => setSelected(null)}>
@@ -446,38 +482,37 @@ const ClientApplications = () => {
                   <DialogHeader>
                     <DialogTitle className="flex items-center gap-3 flex-wrap">
                       <img src={`https://flagcdn.com/w40/${selected.visaType.country.code.toLowerCase()}.png`} alt="" className="w-7 h-7 rounded-full object-cover" />
-                      {language === 'en' ? selected.visaType.country.nameEn : language === 'ar' ? selected.visaType.country.nameAr : selected.visaType.country.nameFr} — {selected.id.slice(0, 8).toUpperCase()}
-                      <Badge variant="outline" className={APP_STATUS_COLOR[selected.status]}>{t(APP_STATUS_LABEL[selected.status])}</Badge>
+                      {selected.visaType.country.nameFr} — {selected.id.slice(0, 8).toUpperCase()}
+                      <Badge variant="outline" className={APP_STATUS_COLOR[selected.status]}>{APP_STATUS_LABEL[selected.status]}</Badge>
                     </DialogTitle>
                   </DialogHeader>
 
                   <Tabs defaultValue="info" className="mt-4">
                     <TabsList className="grid grid-cols-3 w-full">
-                      <TabsTrigger value="info">{t('clientAppsInfoTab')}</TabsTrigger>
-                      <TabsTrigger value="passengers">{t('clientAppsPassengersTab')}</TabsTrigger>
-                      <TabsTrigger value="documents">{t('clientAppsDocumentsTab')}</TabsTrigger>
+                      <TabsTrigger value="info">Infos</TabsTrigger>
+                      <TabsTrigger value="passengers">Voyageurs</TabsTrigger>
+                      <TabsTrigger value="documents">Documents</TabsTrigger>
                     </TabsList>
 
                     {/* ── Info ── */}
                     <TabsContent value="info" className="space-y-4 pt-4">
                       <div className="grid grid-cols-2 gap-3 text-sm rounded-lg border p-4 bg-muted/30">
-                        <div><span className="text-muted-foreground">{t('clientAppsVisa')}:</span> <strong>{language === 'en' ? selected.visaType.nameEn : language === 'ar' ? selected.visaType.nameAr : selected.visaType.nameFr}</strong></div>
-                        <div><span className="text-muted-foreground">{t('clientAppsTravelers')}:</span> <strong>{selected.numberOfPeople}</strong></div>
-                        <div><span className="text-muted-foreground">{t('clientAppsEmail')}</span> <strong>{selected.email}</strong></div>
-                        <div><span className="text-muted-foreground">{t('clientAppsPhone')}</span> <strong>{selected.phone}</strong></div>
-                        <div><span className="text-muted-foreground">{t('clientAppsDeparture')}</span> <strong>{new Date(`${selected.startDate}T00:00:00`).toLocaleDateString(dateLocale)}</strong></div>
-                        {selected.office && <div><span className="text-muted-foreground">{t('clientAppsOffice')}:</span> <strong>{selected.office.name} · {selected.office.wilaya}</strong></div>}
-                        <div><span className="text-muted-foreground">{t('clientAppsTotal')}</span> <strong className="text-primary">{(Number(selected.visaType.price) * selected.numberOfPeople).toLocaleString(dateLocale)} {selected.visaType.currency}</strong></div>
+                        <div><span className="text-muted-foreground">Visa:</span> <strong>{selected.visaType.nameFr}</strong></div>
+                        <div><span className="text-muted-foreground">Voyageurs:</span> <strong>{selected.numberOfPeople}</strong></div>
+                        <div><span className="text-muted-foreground">Email:</span> <strong>{selected.email}</strong></div>
+                        <div><span className="text-muted-foreground">Téléphone:</span> <strong>{selected.phone}</strong></div>
+                        <div><span className="text-muted-foreground">Départ:</span> <strong>{selected.startDate}</strong></div>
+                        <div><span className="text-muted-foreground">Total:</span> <strong className="text-primary">{(Number(selected.visaType.price) * selected.numberOfPeople).toLocaleString('fr-FR')} {selected.visaType.currency}</strong></div>
                       </div>
 
                       {selected.payment && (
                           <div className="rounded-lg border p-4 space-y-2 text-sm">
-                            <p className="font-semibold">{t('clientAppsPayment')}</p>
+                            <p className="font-semibold">Paiement</p>
                             <div className="grid grid-cols-2 gap-2">
-                              <div><span className="text-muted-foreground">{t('clientAppsStatus')}</span> <Badge variant="outline" className={PAYMENT_STATUS_COLOR[selected.payment.status]}>{t(PAYMENT_STATUS_LABEL[selected.payment.status])}</Badge></div>
-                              <div><span className="text-muted-foreground">{t('clientAppsAmount')}</span> <strong>{Number(selected.payment.amount).toLocaleString(dateLocale)} {selected.payment.currency?.toUpperCase()}</strong></div>
-                              <div><span className="text-muted-foreground">{t('clientAppsMethod')}</span> <strong>{PAYMENT_METHOD_LABEL[selected.payment.method] ? t(PAYMENT_METHOD_LABEL[selected.payment.method]) : selected.payment.method}</strong></div>
-                              {selected.payment.paidAt && <div><span className="text-muted-foreground">{t('clientAppsPaidOn')}</span> <strong>{new Date(selected.payment.paidAt).toLocaleString(dateLocale)}</strong></div>}
+                              <div><span className="text-muted-foreground">Statut:</span> <Badge variant="outline" className={PAYMENT_STATUS_COLOR[selected.payment.status]}>{PAYMENT_STATUS_LABEL[selected.payment.status]}</Badge></div>
+                              <div><span className="text-muted-foreground">Montant:</span> <strong>{Number(selected.payment.amount).toLocaleString('fr-FR')} {selected.payment.currency?.toUpperCase()}</strong></div>
+                              <div><span className="text-muted-foreground">Méthode:</span> <strong>{selected.payment.method}</strong></div>
+                              {selected.payment.paidAt && <div><span className="text-muted-foreground">Payé le:</span> <strong>{new Date(selected.payment.paidAt).toLocaleString('fr-FR', { hour12: false })}</strong></div>}
                             </div>
                           </div>
                       )}
@@ -487,8 +522,8 @@ const ClientApplications = () => {
                           <div className="rounded-lg border border-yellow-300 bg-yellow-50 p-4 flex items-center justify-between gap-3">
                             <p className="text-sm text-yellow-800">
                               {selected.payment?.status === 'PENDING'
-                                  ? t('clientAppsPaymentPending')
-                                  : t('clientAppsAwaitingPayment')}
+                                  ? 'Votre paiement est en attente.'
+                                  : 'Cette demande est en attente de paiement.'}
                             </p>
                             <Button
                                 size="sm"
@@ -498,8 +533,8 @@ const ClientApplications = () => {
                                 onClick={() => handlePayNow(selected.id)}
                             >
                               {payingId === selected.id
-                                  ? <><Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> {t('clientAppsRedirecting')}</>
-                                  : t('clientAppsPayNow')}
+                                  ? <><Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> Redirection...</>
+                                  : 'Payer maintenant'}
                             </Button>
                           </div>
                       )}
@@ -508,13 +543,13 @@ const ClientApplications = () => {
                     {/* ── Passengers ── */}
                     <TabsContent value="passengers" className="space-y-3 pt-4">
                       {selected.passengers.map((p, i) => (
-                            <div key={p.id} className="border rounded-lg p-4 space-y-2">
-                            <div className="font-semibold text-sm">{t('clientAppsPassenger')} {i + 1} — {p.firstName} {p.lastName}</div>
+                          <div key={p.id} className="border rounded-lg p-4 space-y-2">
+                            <div className="font-semibold text-sm">Voyageur {i + 1} — {p.firstName} {p.lastName}</div>
                             <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                              <div>{t('clientAppsBorn')} {p.birthDate}{p.birthPlace ? ` ${t('clientAppsBirthPlaceIn')} ${p.birthPlace}` : ''}</div>
-                              <div>{t('clientAppsNationality')} {p.nationality ?? '—'}</div>
-                              <div>{t('clientAppsPassport')} {p.passportNumber}</div>
-                              <div>{t('clientAppsPassportExpiry')} {p.passportExpiryDate}</div>
+                              <div>Né(e): {p.birthDate}{p.birthPlace ? ` à ${p.birthPlace}` : ''}</div>
+                              <div>Nationalité: {p.nationality ?? '—'}</div>
+                              <div>Passeport: {p.passportNumber}</div>
+                              <div>Expiration: {p.passportExpiryDate}</div>
                             </div>
                           </div>
                       ))}
@@ -524,11 +559,11 @@ const ClientApplications = () => {
                     <TabsContent value="documents" className="space-y-3 pt-4">
                       {['APPROVED', 'CANCELLED'].includes(selected.status) && (
                           <p className="text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">
-                            {t('clientAppsDocumentsLocked')} {t(APP_STATUS_LABEL[selected.status]).toLocaleLowerCase(dateLocale)}
+                            Les documents ne peuvent plus être modifiés — demande {APP_STATUS_LABEL[selected.status].toLowerCase()}.
                           </p>
                       )}
                       {selected.visaType.documentRequirements.length === 0 && (
-                          <p className="text-sm text-muted-foreground text-center py-4">{t('clientAppsNoDocuments')}</p>
+                          <p className="text-sm text-muted-foreground text-center py-4">Aucun document requis pour ce visa.</p>
                       )}
                       {selected.visaType.documentRequirements.map(req =>
                           selected.passengers.map(p => (

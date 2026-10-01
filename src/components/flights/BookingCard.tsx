@@ -51,12 +51,6 @@ export default function BookingCard({ booking, onOpen }: Props) {
             </div>
         )}
 
-        {booking.office && (
-            <div className="text-xs text-slate-500 mb-3">
-              Paiement en agence : <span className="font-medium text-slate-700">{booking.office.name}, {booking.office.wilaya}</span>
-            </div>
-        )}
-
         <div className="flex items-center justify-between pt-3 border-t border-slate-100">
           <div className="text-xs text-slate-400 space-x-3">
             {booking.pnr && (

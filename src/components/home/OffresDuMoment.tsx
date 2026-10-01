@@ -2,17 +2,15 @@ import { ArrowRight, ChevronRight } from 'lucide-react';
 import { deals } from '@/data/data.ts';
 import { DealCard } from './DealCard';
 import { Button } from '@/components/ui/button';
-import { useLanguage } from '@/i18n/LanguageContext';
 
 export const OffresDuMoment = () => {
-    const { t } = useLanguage();
     return (
         <section className="max-w-6xl mx-auto px-4 mt-16 overflow-x-hidden">
             <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl md:text-2xl font-bold text-[#002161]">{t('homeOffersTitle')}</h2>
+                <h2 className="text-xl md:text-2xl font-bold text-[#002161]">Offres du moment</h2>
                 <Button asChild variant="ghost" className="flex items-center gap-1 text-sm font-semibold text-[#0454E8] hover:text-[#0454E8]">
                     <a href="#">
-                        {t('homeOffersDiscoverAll')} <ArrowRight className="w-4 h-4" />
+                        Découvrir toutes les offres <ArrowRight className="w-4 h-4" />
                     </a>
                 </Button>
             </div>

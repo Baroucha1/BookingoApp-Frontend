@@ -3,8 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { Plane, ChevronRight } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { searchBookings, type BookingListItem } from '@/service/flights/searchBookings.service';
-import { useLanguage } from '@/i18n/LanguageContext';
-import type { TranslationKey } from '@/i18n/translations';
+import AppLoading from '@/components/common/AppLoading';
 
 const STATUS_COLOR: Record<string, string> = {
     PENDING: 'bg-amber-50 text-amber-600 border-amber-200',
@@ -13,27 +12,25 @@ const STATUS_COLOR: Record<string, string> = {
     CANCELLED: 'bg-gray-50 text-gray-600 border-gray-200',
 };
 
-const STATUS_LABEL: Record<string, TranslationKey> = {
-    PENDING: 'clientStatusPending',
-    CONFIRMED: 'clientStatusConfirmed',
-    TICKETED: 'clientStatusConfirmed',
-    CANCELLED: 'clientStatusCancelled',
+const STATUS_LABEL: Record<string, string> = {
+    PENDING: 'En attente',
+    CONFIRMED: 'Confirmé',
+    TICKETED: 'Confirmé',
+    CANCELLED: 'Annulé',
 };
 
-const formatDate = (iso?: string, locale = 'fr-FR') => {
+const formatDate = (iso?: string) => {
     if (!iso) return '—';
     try {
-        return new Date(iso).toLocaleDateString(locale, { day: '2-digit', month: 'short', year: 'numeric' });
+        return new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
     } catch {
         return iso;
     }
 };
 
 const ClientFlights = () => {
-    const { t, language } = useLanguage();
     const [flights, setFlights] = useState<BookingListItem[]>([]);
     const [loading, setLoading] = useState(true);
-    const dateLocale = language === 'ar' ? 'ar-DZ' : language === 'en' ? 'en-US' : 'fr-FR';
 
     useEffect(() => {
         searchBookings({})
@@ -45,23 +42,25 @@ const ClientFlights = () => {
     return (
         <div className="space-y-6">
             <div>
-                <h1 className="text-xl font-semibold text-gray-900">{t('clientFlightsTitle')}</h1>
-                <p className="text-sm text-gray-500 mt-1">{t('clientFlightsDescription')}</p>
+                <h1 className="text-xl font-semibold text-gray-900">Mes vols</h1>
+                <p className="text-sm text-gray-500 mt-1">Historique de vos réservations de vol.</p>
             </div>
 
             <div className="bg-white rounded-2xl border border-gray-100 p-6">
                 {loading && (
-                    <div className="space-y-3">
-                        {[1, 2, 3].map(i => (
-                            <div key={i} className="h-16 rounded-xl bg-gray-100 animate-pulse" />
-                        ))}
+                    <div className="py-8">
+                        <AppLoading
+                            fullScreen={false}
+                            message="Chargement de vos billets et vols..."
+                            subMessage="Recherche de vos dossiers de vol..."
+                        />
                     </div>
                 )}
 
                 {!loading && flights.length === 0 && (
                     <div className="text-center py-10">
                         <Plane className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                        <p className="text-sm text-gray-400">{t('clientNoFlightBookings')}</p>
+                        <p className="text-sm text-gray-400">Aucune réservation de vol.</p>
                     </div>
                 )}
 
@@ -79,15 +78,15 @@ const ClientFlights = () => {
                                     variant="outline"
                                     className={`mb-1 text-xs font-normal ${STATUS_COLOR[f.status ?? ''] ?? 'bg-gray-50 text-gray-600 border-gray-200'}`}
                                 >
-                                    {f.status ? t(STATUS_LABEL[f.status] ?? 'clientStatusUnknown') : '—'}
+                                    {STATUS_LABEL[f.status ?? ''] ?? f.status ?? '—'}
                                 </Badge>
                                 <p className="font-medium text-gray-900 truncate">{f.departureAirport} → {f.arrivalAirport}</p>
                                 <p className="text-xs text-gray-400">
-                                    {formatDate(f.departureDate, dateLocale)} · {f.passengers?.length ?? 1} {t((f.passengers?.length ?? 1) === 1 ? 'clientPassenger' : 'clientPassengers')} · {f.pnr ?? f.uniqueId ?? ''}
+                                    {formatDate(f.departureDate)} · {f.passengers?.length ?? 1} passager · {f.pnr ?? f.uniqueId ?? ''}
                                 </p>
                                 {f.office && (
                                     <p className="text-xs text-gray-500 mt-1">
-                                        {t('clientFlightsAgencyPayment')} <span className="font-medium text-gray-700">{f.office.name}, {f.office.wilaya}</span>
+                                        Paiement en agence : <span className="font-medium text-gray-700">{f.office.name}, {f.office.wilaya}</span>
                                     </p>
                                 )}
                             </div>

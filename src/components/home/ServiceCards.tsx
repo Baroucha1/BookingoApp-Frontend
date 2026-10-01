@@ -1,84 +1,138 @@
-import { ChevronRight } from 'lucide-react';
-import { services } from '@/data/data.ts';
-import {Link} from "react-router-dom";
+import { ArrowRight } from 'lucide-react';
+import { Link } from "react-router-dom";
 import { useLanguage } from '@/i18n/LanguageContext';
-import type { TranslationKey } from '@/i18n/translations';
 
-const serviceCopy: Record<string, { title: TranslationKey; desc: TranslationKey; cta: TranslationKey }> = {
-    '/flights': { title: 'homeServiceFlightsTitle', desc: 'homeServiceFlightsDesc', cta: 'homeServiceFlightsCta' },
-    '/hotels': { title: 'homeServiceHotelsTitle', desc: 'homeServiceHotelsDesc', cta: 'homeServiceHotelsCta' },
-    '/visa': { title: 'homeServiceVisasTitle', desc: 'homeServiceVisasDesc', cta: 'homeServiceVisasCta' },
-    '/esim': { title: 'homeServiceEsimTitle', desc: 'homeServiceEsimDesc', cta: 'homeServiceEsimCta' },
+const serviceData = {
+    fr: [
+        {
+            title: 'VOLS',
+            desc: "Comparez des centaines de compagnies et réservez vos billets d'avion au meilleur prix",
+            cta: 'Rechercher un vol',
+            image: '/assets/home/vols.webp',
+            link: '/flights',
+        },
+        {
+            title: 'Hôtels',
+            desc: "Trouvez l'hébergement parfait parmi des milliers d'hôtels dans le monde entier",
+            cta: 'Découvrir les hôtels',
+            image: '/assets/home/hotel.webp',
+            link: '/hotels',
+        },
+        {
+            title: 'Visas',
+            desc: 'Demandez votre visa en ligne rapidement et en toute sécurité',
+            cta: 'Faire une demande',
+            image: '/assets/home/visa.webp',
+            link: '/visa',
+        },
+        {
+            title: 'e-SIM',
+            desc: "Profitez d'Internet haut débit partout dans le monde avec une eSIM simple à activer dès votre arrivée",
+            cta: 'Explorer les forfaits',
+            image: '/assets/home/gosim.webp',
+            link: '/esim',
+        },
+    ],
+    en: [
+        {
+            title: 'FLIGHTS',
+            desc: "Compare hundreds of airlines and book your flight tickets at the best rates",
+            cta: 'Search a flight',
+            image: '/assets/home/vols.webp',
+            link: '/flights',
+        },
+        {
+            title: 'Hotels',
+            desc: "Find the ideal accommodation among thousands of hotels around the globe",
+            cta: 'Explore hotels',
+            image: '/assets/home/hotel.webp',
+            link: '/hotels',
+        },
+        {
+            title: 'Visas',
+            desc: 'Apply for your visa online with speed, confidence and safety',
+            cta: 'Apply now',
+            image: '/assets/home/visa.webp',
+            link: '/visa',
+        },
+        {
+            title: 'e-SIM',
+            desc: "Stay connected worldwide with high-speed internet and instant eSIM activation upon landing",
+            cta: 'Explore plans',
+            image: '/assets/home/gosim.webp',
+            link: '/esim',
+        },
+    ],
+    ar: [
+        {
+            title: 'رحلات الطيران',
+            desc: "قارن بين مئات شركات الطيران واحجز تذاكر سفرك بأفضل الأسعار",
+            cta: 'ابحث عن رحلة',
+            image: '/assets/home/vols.webp',
+            link: '/flights',
+        },
+        {
+            title: 'الفنادق',
+            desc: "اعثر على الإقامة المثالية بين آلاف الفنادق في جميع أنحاء العالم",
+            cta: 'استكشف الفنادق',
+            image: '/assets/home/hotel.webp',
+            link: '/hotels',
+        },
+        {
+            title: 'التأشيرات',
+            desc: 'قدّم طلب تأشيرتك الإلكترونية عبر الإنترنت بكل سهولة وأمان',
+            cta: 'تقديم طلب',
+            image: '/assets/home/visa.webp',
+            link: '/visa',
+        },
+        {
+            title: 'شريحة e-SIM',
+            desc: "تمتع بإنترنت عالي السرعة في أكثر من 180 دولة مع تفعيل فوري وسريع",
+            cta: 'استكشف الباقات',
+            image: '/assets/home/gosim.webp',
+            link: '/esim',
+        },
+    ],
 };
 
 export const ServiceCards = () => {
-    const { t } = useLanguage();
+    const { language } = useLanguage();
+    const list = serviceData[language] || serviceData.fr;
+
     return (
-        <section id="services" className="relative max-w-6xl mx-auto px-3 z-10 overflow-x-hidden">
-            <div className="relative">
-                <div className="md:hidden pointer-events-none absolute inset-y-0 right-0 w-14 z-10 bg-gradient-to-l from-[#EAF1FF] to-transparent flex items-center justify-end pr-1">
-                    <ChevronRight className="w-5 h-5 text-[#0454E8]" />
-                </div>
+        <section id="services" className="relative max-w-6xl mx-auto px-4 py-6 z-10">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5 sm:gap-5 md:gap-6">
+                {list.map((s) => (
+                    <Link
+                        key={s.title}
+                        to={s.link}
+                        className="group rounded-[24px] shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden bg-white dark:bg-slate-900 hover:-translate-y-1.5 active:scale-[0.98] border border-slate-100 dark:border-slate-800 flex flex-col cursor-pointer"
+                    >
+                        {/* Image Container */}
+                        <div className="relative block h-32 sm:h-40 md:h-44 w-full overflow-hidden border-b-2 border-[#FFAA01]">
+                            <img
+                                src={s.image}
+                                alt={s.title}
+                                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-108"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
+                        </div>
 
-                <div className="flex overflow-x-auto snap-x snap-mandatory gap-3 pb-2 md:grid md:grid-cols-4 md:gap-6 md:overflow-visible [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-                    {services.map((s, i) => {
-                        const copy = serviceCopy[s.link];
-                        const title = copy ? t(copy.title) : s.title;
-                        const description = copy ? t(copy.desc) : s.desc;
-                        const cta = copy ? t(copy.cta) : s.cta;
-                        return (
-                        <div
-                            key={s.link}
-                            className="group snap-start shrink-0 w-[78%] sm:w-[55%] md:w-auto rounded-2xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden bg-white hover:-translate-y-1.5 animate-fade-in"
-                            style={{
-                                animationDelay: `${i * 100}ms`,
-                                animationFillMode: 'backwards',
-                                backfaceVisibility: 'hidden',
-                                WebkitBackfaceVisibility: 'hidden',
-                                transform: 'translateZ(0)',
-                            }}
-                        >
-                            {/* MOBILE — portrait image, text overlaid, no white box */}
-                            <a href={s.link} className="md:hidden relative block h-64 w-full overflow-hidden rounded-2xl border-2 border-[#FFAA01]">
-                                <img
-                                    src={s.image}
-                                    alt={title}
-                                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                                />
-                                {/* scrim so text reads over any part of the image */}
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-
-                                <div className="absolute inset-x-0 bottom-0 p-4">
-                                    <h3 className="font-extrabold text-lg text-white drop-shadow">{title}</h3>
-                                    <p className="text-[13px] text-white/85 leading-relaxed mt-1.5 line-clamp-2">{description}</p>
-                                    <span className="inline-block text-[13px] font-semibold mt-3" style={{ color: '#FFAA01' }}>
-                                        {cta}
-                                    </span>
-                                </div>
-                            </a>
-
-                            {/* DESKTOP — existing layout, unchanged */}
-                            <div className="hidden md:flex md:flex-col">
-                                <div className="border-b-0 shrink-0 h-40 w-full overflow-hidden rounded-t-2xl border-2 border-[#FFAA01]">
-                                    <img
-                                        src={s.image}
-                                        alt={title}
-                                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                                    />
-                                </div>
-
-                                <div className="relative -mt-4 rounded-t-2xl bg-white px-5 pt-3 pb-6 flex flex-col flex-1 min-h-[190px]">
-                                    <h3 className="font-extrabold text-[15px] text-[#002161]">{title}</h3>
-                                    <p className="text-[13px] text-[#002161] leading-relaxed mt-2">{description}</p>
-                                    <Link to={s.link} className="text-[13px] font-semibold text-[#FFAA01] hover:underline mt-auto pt-3">
-                                        {cta}
-                                    </Link>
-                                </div>
+                        {/* Content */}
+                        <div className="p-3.5 sm:p-4 flex flex-col flex-1 bg-white dark:bg-slate-900">
+                            <h3 className="font-extrabold text-sm sm:text-base text-[#002161] dark:text-white line-clamp-1 group-hover:text-[#0454E8] transition-colors">
+                                {s.title}
+                            </h3>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 leading-snug mt-1.5 line-clamp-2">
+                                {s.desc}
+                            </p>
+                            <div className="text-xs font-bold text-[#FFAA01] mt-auto pt-3 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                                <span>{s.cta}</span>
+                                <ArrowRight className="w-3.5 h-3.5" />
                             </div>
                         </div>
-                        );
-                    })}
-                </div>
+                    </Link>
+                ))}
             </div>
         </section>
     );

@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import {
-  Eye, FileText, Users, ShieldCheck, Mail, Phone, CreditCard, Receipt,
+  Eye, FileText, Users, ShieldCheck, Mail, Phone,
   Calendar, MapPin, Globe, ExternalLink, Loader2,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -30,29 +30,6 @@ const STATUS_COLOR: Record<ApplicationStatus, string> = {
   APPROVED:     'bg-green-100  text-green-800  border-green-300',
   REJECTED:     'bg-red-100    text-red-800    border-red-300',
   CANCELLED:    'bg-gray-100   text-gray-800   border-gray-300',
-};
-const PAYMENT_STATUS_LABEL: Record<string, string> = {
-  UNPAID:   'Non payé',
-  PENDING:  'En attente',
-  PAID:     'Payé',
-  FAILED:   'Échoué',
-  REFUNDED: 'Remboursé',
-  CANCELLED: 'Annulé',
-};
-const PAYMENT_STATUS_COLOR: Record<string, string> = {
-  UNPAID:   'bg-gray-100 text-gray-800 border-gray-300',
-  PENDING:  'bg-yellow-100 text-yellow-800 border-yellow-300',
-  PAID:     'bg-green-100 text-green-800 border-green-300',
-  FAILED:   'bg-red-100 text-red-800 border-red-300',
-  REFUNDED: 'bg-orange-100 text-orange-800 border-orange-300',
-  CANCELLED: 'bg-gray-100 text-gray-800 border-gray-300',
-};
-const PAYMENT_METHOD_LABEL: Record<string, string> = {
-  SATIM: 'CIB / EDAHABIA',
-  CASH: 'Espèces',
-  BANK_TRANSFER: 'Virement bancaire',
-  STRIPE: 'Stripe',
-  PAYPAL: 'PayPal',
 };
 
 const ApplicationsAdmin = () => {
@@ -169,17 +146,16 @@ const ApplicationsAdmin = () => {
                   <TableHead>Pays / Visa</TableHead>
                   <TableHead>Voyageurs</TableHead>
                   <TableHead>Statut</TableHead>
-                  <TableHead>Paiement</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead className="w-16" />
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading && (
-                    <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Chargement...</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Chargement...</TableCell></TableRow>
                 )}
                 {!loading && filtered.length === 0 && (
-                    <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Aucune demande</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Aucune demande</TableCell></TableRow>
                 )}
                 {filtered.map(app => (
                     <TableRow key={app.id} className="cursor-pointer hover:bg-muted/40" onClick={() => { setSelected(app); setAdminNotes(''); }}>
@@ -191,23 +167,12 @@ const ApplicationsAdmin = () => {
                           <div>
                             <p className="text-sm font-medium">{app.visaType.country.nameFr}</p>
                             <p className="text-xs text-muted-foreground">{app.visaType.nameFr}</p>
-                            {app.office && <p className="text-xs text-muted-foreground">{app.office.name} · {app.office.wilaya}</p>}
                           </div>
                         </div>
                       </TableCell>
                       <TableCell>{app.numberOfPeople}</TableCell>
                       <TableCell>
                         <Badge variant="outline" className={STATUS_COLOR[app.status]}>{STATUS_LABEL[app.status]}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        {(() => {
-                          const paymentStatus = app.payment?.status ?? 'UNPAID';
-                          return (
-                            <Badge variant="outline" className={PAYMENT_STATUS_COLOR[paymentStatus] ?? PAYMENT_STATUS_COLOR.UNPAID}>
-                              {PAYMENT_STATUS_LABEL[paymentStatus] ?? paymentStatus}
-                            </Badge>
-                          );
-                        })()}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {new Date(app.createdAt).toLocaleDateString('fr-FR')}
@@ -236,12 +201,11 @@ const ApplicationsAdmin = () => {
                   </DialogHeader>
 
                   <Tabs defaultValue="info" className="mt-4">
-                    <TabsList className="grid grid-cols-4 w-full">
+                    <TabsList className="grid grid-cols-3 w-full">
                       <TabsTrigger value="info">Infos</TabsTrigger>
                       <TabsTrigger value="passengers">
                         Voyageurs <Badge variant="secondary" className="ms-1.5 h-5 px-1.5 text-xs">{selected.passengers.length}</Badge>
                       </TabsTrigger>
-                      <TabsTrigger value="payment">Paiement</TabsTrigger>
                       <TabsTrigger value="notes">Notes</TabsTrigger>
                     </TabsList>
 
@@ -253,40 +217,16 @@ const ApplicationsAdmin = () => {
                         <div className="flex items-start gap-2"><Calendar className="w-4 h-4 text-muted-foreground mt-0.5" /><div><p className="text-xs text-muted-foreground">Date de départ</p><p className="font-medium">{new Date(selected.startDate).toLocaleDateString('fr-FR')}</p></div></div>
                         <div className="flex items-start gap-2"><Users className="w-4 h-4 text-muted-foreground mt-0.5" /><div><p className="text-xs text-muted-foreground">Voyageurs</p><p className="font-medium">{selected.numberOfPeople}</p></div></div>
                         <div className="flex items-start gap-2"><Globe className="w-4 h-4 text-muted-foreground mt-0.5" /><div><p className="text-xs text-muted-foreground">Visa</p><p className="font-medium">{selected.visaType.nameFr}</p></div></div>
-                        {selected.office && <div className="flex items-start gap-2"><MapPin className="w-4 h-4 text-muted-foreground mt-0.5" /><div><p className="text-xs text-muted-foreground">Agence de paiement</p><p className="font-medium">{selected.office.name} · {selected.office.wilaya}</p></div></div>}
                         <div className="flex items-start gap-2"><Calendar className="w-4 h-4 text-muted-foreground mt-0.5" /><div><p className="text-xs text-muted-foreground">Soumis le</p><p className="font-medium">{new Date(selected.createdAt).toLocaleDateString('fr-FR')}</p></div></div>
                       </div>
-                    </TabsContent>
-
-                    {/* ── Payment ── */}
-                    <TabsContent value="payment" className="mt-4 space-y-4">
-                      {selected.payment ? (
-                        <>
-                          <div className="grid grid-cols-2 gap-3 text-sm rounded-lg border p-4 bg-muted/30">
-                            <div className="flex items-start gap-2"><CreditCard className="w-4 h-4 text-muted-foreground mt-0.5" /><div><p className="text-xs text-muted-foreground">Statut</p><Badge variant="outline" className={PAYMENT_STATUS_COLOR[selected.payment.status] ?? PAYMENT_STATUS_COLOR.UNPAID}>{PAYMENT_STATUS_LABEL[selected.payment.status] ?? selected.payment.status}</Badge></div></div>
-                            <div className="flex items-start gap-2"><CreditCard className="w-4 h-4 text-muted-foreground mt-0.5" /><div><p className="text-xs text-muted-foreground">Méthode</p><p className="font-medium">{PAYMENT_METHOD_LABEL[selected.payment.method] ?? selected.payment.method}</p></div></div>
-                            <div className="flex items-start gap-2"><Receipt className="w-4 h-4 text-muted-foreground mt-0.5" /><div><p className="text-xs text-muted-foreground">Montant</p><p className="font-semibold">{Number(selected.payment.amount).toLocaleString('fr-FR')} {selected.payment.currency?.toUpperCase()}</p></div></div>
-                            <div className="flex items-start gap-2"><Calendar className="w-4 h-4 text-muted-foreground mt-0.5" /><div><p className="text-xs text-muted-foreground">Payé le</p><p className="font-medium">{selected.payment.paidAt ? new Date(selected.payment.paidAt).toLocaleString('fr-FR') : '—'}</p></div></div>
-                            <div className="col-span-2"><p className="text-xs text-muted-foreground">ID paiement</p><p className="font-mono text-xs break-all">{selected.payment.id}</p></div>
-                            {selected.payment.receiptRef && <div><p className="text-xs text-muted-foreground">Référence du reçu</p><p className="font-mono text-xs">{selected.payment.receiptRef}</p></div>}
-                            {selected.payment.receiptNumber != null && <div><p className="text-xs text-muted-foreground">N° du reçu</p><p className="font-mono text-xs">{selected.payment.receiptNumber}</p></div>}
-                            {selected.payment.satimOrderId && <div className="col-span-2"><p className="text-xs text-muted-foreground">ID commande SATIM</p><p className="font-mono text-xs break-all">{selected.payment.satimOrderId}</p></div>}
-                            {selected.payment.satimOrderNumber && <div><p className="text-xs text-muted-foreground">N° de commande</p><p className="font-mono text-xs">{selected.payment.satimOrderNumber}</p></div>}
-                            {selected.payment.satimIdentifiant && <div><p className="text-xs text-muted-foreground">Identifiant SATIM</p><p className="font-mono text-xs">{selected.payment.satimIdentifiant}</p></div>}
-                            {selected.payment.satimApprovalCode && <div><p className="text-xs text-muted-foreground">Code d'autorisation</p><p className="font-mono text-xs">{selected.payment.satimApprovalCode}</p></div>}
-                          </div>
-                          {selected.office && (
-                            <div className="rounded-lg border p-4 space-y-2 text-sm">
-                              <h4 className="font-semibold">Agence de paiement</h4>
-                              <p>{selected.office.name} · {selected.office.wilaya}</p>
+                      {selected.payment && (
+                          <div className="rounded-lg border p-4 text-sm space-y-1">
+                            <p className="font-semibold mb-2">Paiement</p>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div><span className="text-muted-foreground">Statut: </span><strong>{selected.payment.status}</strong></div>
+                              <div><span className="text-muted-foreground">Montant: </span><strong>{Number(selected.payment.amount).toLocaleString('fr-FR')} {selected.payment.currency?.toUpperCase()}</strong></div>
                             </div>
-                          )}
-                        </>
-                      ) : (
-                        <div className="rounded-lg border p-6 text-center text-sm text-muted-foreground">
-                          <CreditCard className="w-5 h-5 mx-auto mb-2" />
-                          Aucun paiement enregistré pour cette demande.
-                        </div>
+                          </div>
                       )}
                     </TabsContent>
 

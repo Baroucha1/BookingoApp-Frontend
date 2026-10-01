@@ -210,12 +210,6 @@ export interface Passenger {
 // VISA APPLICATION
 // =============================================================================
 
-export interface OfficeSummary {
-    id:     string;
-    name:   string;
-    wilaya: string;
-}
-
 export interface VisaApplication {
     id:            string;
     email:         string;
@@ -227,8 +221,6 @@ export interface VisaApplication {
     visaType:      VisaType;
     clientId:      string | null;
     agencyId:      string | null;
-    officeId:      string | null;
-    office:        OfficeSummary | null;
     passengers:    Passenger[];
     payment:       Payment | null;
     createdAt:     string;
@@ -245,12 +237,6 @@ export interface Payment {
     currency:              string;
     method:                PaymentMethod;
     status:                PaymentStatus;
-    satimOrderId:          string | null;
-    receiptNumber:         number | null;
-    receiptRef:            string | null;
-    satimApprovalCode:     string | null;
-    satimIdentifiant:      string | null;
-    satimOrderNumber:      string | null;
     stripePaymentIntentId: string | null;
     stripeClientSecret:    string | null;
     stripeReceiptUrl:      string | null;

@@ -6,15 +6,13 @@ import {
 } from 'lucide-react';
 import HelpCenterModal from '@/components/HelpCenterModal';
 import FAQModal from '@/components/FAQModal';
-import { useLanguage } from '@/i18n/LanguageContext';
-import type { TranslationKey } from '@/i18n/translations';
 
 interface AssistanceItem {
     icon: React.ComponentType<{ className?: string }>;
     iconBg: string;
     iconColor: string;
-    titleKey: TranslationKey;
-    descriptionKey: TranslationKey;
+    title: string;
+    description: string;
     to?: string;
     action?: 'help-modal' | 'faq-modal';
 }
@@ -24,46 +22,45 @@ const items: AssistanceItem[] = [
         icon: HelpCircle,
         iconBg: 'bg-blue-100',
         iconColor: 'text-blue-600',
-        titleKey: 'assistanceHelpTitle',
-        descriptionKey: 'assistanceHelpDescription',
+        title: "Centre d'aide",
+        description: "Trouvez des reponses a vos questions dans notre centre d'aide.",
         action: 'help-modal',
     },
     {
         icon: FileQuestion,
         iconBg: 'bg-amber-100',
         iconColor: 'text-amber-600',
-        titleKey: 'footerFaq',
-        descriptionKey: 'assistanceFaqDescription',
+        title: 'FAQ',
+        description: 'Consultez les questions les plus frequentes.',
         action: 'faq-modal',
     },
     {
         icon: Mail,
         iconBg: 'bg-blue-100',
         iconColor: 'text-blue-600',
-        titleKey: 'assistanceContactTitle',
-        descriptionKey: 'assistanceContactDescription',
+        title: 'Nous contacter',
+        description: "Contactez notre equipe d'assistance.",
         to: '/contact',
     },
     {
         icon: Ban,
         iconBg: 'bg-red-100',
         iconColor: 'text-red-600',
-        titleKey: 'assistanceCancellationTitle',
-        descriptionKey: 'assistanceCancellationDescription',
+        title: 'Annulation/Remboursement',
+        description: "Consultez notre politique d'annulation et de remboursement.",
         to: '/cancellation',
     },
     {
         icon: ClipboardList,
         iconBg: 'bg-green-100',
         iconColor: 'text-green-600',
-        titleKey: 'assistanceBookingTermsTitle',
-        descriptionKey: 'assistanceBookingTermsDescription',
+        title: 'Conditions et Reservations',
+        description: 'Consultez nos conditions generales et les informations sur les reservations.',
         to: '/booking-terms',
     },
 ];
 
 const AssistancePage = () => {
-    const { t } = useLanguage();
     const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
     const [isFaqModalOpen, setIsFaqModalOpen] = useState(false);
 
@@ -81,10 +78,11 @@ const AssistancePage = () => {
 
                 <div className="relative z-10 max-w-7xl mx-auto px-6 md:px-10 py-16 md:py-20">
                     <h1 className="text-4xl md:text-5xl font-extrabold text-[#0B1E5C]">
-                        {t('assistanceTitle')}
+                        Assistance
                     </h1>
                     <p className="text-gray-600 mt-4 max-w-md leading-relaxed">
-                        {t('assistanceDescription')}
+                        Nous sommes la pour vous aider. Selectionnez une option ci-dessous
+                        pour obtenir de l'aide ou des informations.
                     </p>
                     <div className="w-14 h-1 mt-5 rounded-full" style={{ background: '#FFB400' }} />
                 </div>
@@ -103,8 +101,8 @@ const AssistancePage = () => {
                                         <Icon className={`w-5 h-5 ${item.iconColor}`} />
                                     </div>
                                     <div>
-                                        <h3 className="font-bold text-[#0B1E5C]">{t(item.titleKey)}</h3>
-                                        <p className="text-sm text-gray-500 mt-0.5">{t(item.descriptionKey)}</p>
+                                        <h3 className="font-bold text-[#0B1E5C]">{item.title}</h3>
+                                        <p className="text-sm text-gray-500 mt-0.5">{item.description}</p>
                                     </div>
                                 </div>
                                 <ChevronRight className="w-5 h-5 text-gray-400 shrink-0" />
@@ -114,7 +112,7 @@ const AssistancePage = () => {
                         if (item.action === 'help-modal') {
                             return (
                                 <button
-                                    key={item.titleKey}
+                                    key={item.title}
                                     onClick={() => setIsHelpModalOpen(true)}
                                     className="flex items-center justify-between gap-4 bg-white rounded-2xl px-6 py-5 shadow-sm hover:shadow-md transition-shadow text-left w-full"
                                 >
@@ -126,7 +124,7 @@ const AssistancePage = () => {
                         if (item.action === 'faq-modal') {
                             return (
                                 <button
-                                    key={item.titleKey}
+                                    key={item.title}
                                     onClick={() => setIsFaqModalOpen(true)}
                                     className="flex items-center justify-between gap-4 bg-white rounded-2xl px-6 py-5 shadow-sm hover:shadow-md transition-shadow text-left w-full"
                                 >
@@ -137,7 +135,7 @@ const AssistancePage = () => {
 
                         return (
                             <Link
-                                key={item.titleKey}
+                                key={item.title}
                                 to={item.to!}
                                 className="flex items-center justify-between gap-4 bg-white rounded-2xl px-6 py-5 shadow-sm hover:shadow-md transition-shadow"
                             >
@@ -153,9 +151,9 @@ const AssistancePage = () => {
                                 <Headphones className="w-5 h-5 text-[#0B1E5C]" />
                             </div>
                             <div>
-                                <h3 className="font-bold text-[#0B1E5C]">{t('assistanceUrgentTitle')}</h3>
+                                <h3 className="font-bold text-[#0B1E5C]">Besoin d'aide immediate ?</h3>
                                 <p className="text-sm text-gray-600 mt-0.5">
-                                    {t('assistanceAvailability')}
+                                    Notre equipe est disponible 24h/7j pour vous accompagner.
                                 </p>
                             </div>
                         </div>
@@ -165,7 +163,7 @@ const AssistancePage = () => {
                             style={{ background: '#0B1E5C' }}
                         >
                             <MessageCircle className="w-4 h-4" />
-                            {t('assistanceContactTitle')}
+                            Nous contacter
                         </Link>
                     </div>
                 </div>

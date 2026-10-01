@@ -25,20 +25,21 @@ export default function NearbyDatesCarousel({ dates, selectedDate, onSelectDate 
 
     const cheapestPrice = Math.min(...dates.map((d) => d.price));
 
-    const scroll = (dir: 'left' | 'right') => {
-        scrollRef.current?.scrollBy({ left: dir === 'left' ? -200 : 200, behavior: 'smooth' });
-    };
-
     return (
-        <div className="relative bg-blue-50 rounded-xl border border-slate-200 shadow-sm p-3 mb-6">
-            <div className="flex items-center gap-2 mb-3 text-sm font-semibold text-[#0454E8]">
-                <Tag className="w-4 h-4" />
-                Prix les plus bas sur les dates proches
+        <div className="relative bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200/80 shadow-md p-3 sm:p-4 mb-4 sm:mb-6">
+            <div className="flex items-center justify-between gap-2 mb-3">
+                <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-[#0865FE]">
+                    <div className="p-1.5 rounded-lg bg-blue-50 text-[#0865FE]">
+                        <Tag className="w-4 h-4" />
+                    </div>
+                    <span>Dates & Meilleures offres</span>
+                </div>
+                <span className="text-[10px] font-semibold text-slate-400">Glisser &rarr;</span>
             </div>
 
             <div
                 ref={scrollRef}
-                className="flex items-stretch gap-3 overflow-x-auto scroll-smooth [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+                className="flex items-center gap-2.5 overflow-x-auto scroll-smooth snap-x snap-mandatory py-1 px-0.5 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
             >
                 {dates.map((d) => {
                     const { dayLabel, dateLabel } = fmtRange(d.date);
@@ -51,28 +52,28 @@ export default function NearbyDatesCarousel({ dates, selectedDate, onSelectDate 
                             type="button"
                             onClick={() => onSelectDate(d.date)}
                             className={cn(
-                                'shrink-0 flex flex-col items-center justify-center gap-1 px-6 py-5 rounded-xl border text-center min-w-[150px] transition',
+                                'snap-start shrink-0 flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-xl border text-center min-w-[105px] sm:min-w-[125px] transition-all duration-200 active:scale-95',
                                 isSelected
-                                    ? 'border-[#0454E8] bg-[#EFF6FF] shadow-sm'
-                                    : 'border-slate-200 bg-white hover:border-[#0454E8]/40',
+                                    ? 'border-[#0865FE] bg-gradient-to-b from-blue-50/90 to-blue-100/60 shadow-md ring-2 ring-[#0865FE]/20'
+                                    : 'border-slate-200/90 bg-white hover:bg-slate-50/80 shadow-xs'
                             )}
                         >
-                            <span className="text-sm text-slate-500">{dateLabel}</span>
-                            <span className="text-2xl font-bold text-[#0B0F2E]">
-        {d.price.toLocaleString('fr-FR')}
-    </span>
-                            <span className="text-xs text-slate-400 capitalize">{dayLabel}</span>
-                            {isCheapest && (
-                                <span className="mt-1 text-xs font-semibold text-white bg-[#0454E8] rounded-full px-2.5 py-1">
-            Meilleur prix
-        </span>
+                            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">{dayLabel}</span>
+                            <span className="text-xs font-bold text-slate-800 my-0.5">{dateLabel}</span>
+                            <span className={cn('text-sm sm:text-base font-extrabold tabular-nums', isSelected ? 'text-[#0865FE]' : 'text-[#002161]')}>
+                                {d.price.toLocaleString('fr-FR')} <span className="text-[10px] font-normal">{d.currency}</span>
+                            </span>
+                            {isCheapest ? (
+                                <span className="mt-1.5 text-[9px] font-bold text-white bg-emerald-500 px-2 py-0.5 rounded-full shadow-xs">
+                                    Moins cher
+                                </span>
+                            ) : (
+                                <span className="h-4" />
                             )}
                         </button>
                     );
                 })}
             </div>
-
-
         </div>
     );
 }

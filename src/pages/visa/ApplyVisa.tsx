@@ -69,6 +69,32 @@ const ApplyVisa = () => {
     }
   }, [user, loading, navigate, toast, language]);
 
+  // Auto-fill account info if logged in or when token info loads
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (user) {
+      const full = [user.name, user.lastName].filter(Boolean).join(' ');
+      if (full) setFullName(prev => prev || full);
+      if (user.email) setEmail(prev => prev || user.email);
+      if (user.phone) setPhone(prev => prev || user.phone || '');
+    }
+    if (token) {
+      fetch(`${import.meta.env.VITE_API_URL}/api/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (!data) return;
+          const full = [data.name, data.lastName].filter(Boolean).join(' ');
+          if (full) setFullName(prev => prev || full);
+          if (data.email) setEmail(prev => prev || data.email);
+          if (data.phone) setPhone(prev => prev || data.phone);
+          if (data.profile?.passportNumber) setPassportNumber(prev => prev || data.profile.passportNumber);
+        })
+        .catch(() => {});
+    }
+  }, [user]);
+
   // Fetch visa types
   useEffect(() => {
     const fetchVisas = async () => {
@@ -201,10 +227,20 @@ const ApplyVisa = () => {
   const req = <span className="text-destructive ml-0.5">*</span>;
 
   return (
-    <div className="container py-10 max-w-2xl">
-      <Link to={`/destination/${slug}`} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-6">
-        <ArrowLeft className="w-4 h-4" /> {countryName}
-      </Link>
+    <div
+      className="container max-w-2xl px-4 pb-6 sm:pb-10"
+      style={{
+        paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1.5rem)',
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => window.history.length > 1 ? navigate(-1) : navigate('/visa')}
+        className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-gray-200 text-gray-700 hover:text-[#0865FE] hover:border-[#0865FE]/30 font-semibold text-xs shadow-xs hover:shadow-sm transition-all mb-6 cursor-pointer"
+      >
+        <ArrowLeft className="w-3.5 h-3.5" />
+        <span>{countryName ? `Retour à ${countryName}` : 'Retour aux visas'}</span>
+      </button>
 
       <h1 className="text-2xl font-bold mb-1">{t('applyNow')} - {countryName}</h1>
       <p className="text-sm text-muted-foreground mb-6">{visaName}</p>
@@ -401,9 +437,17 @@ const ApplyVisa = () => {
       </motion.div>
 
       <div className="flex justify-between mt-6">
-        <Button variant="outline" onClick={() => setCurrentStep(Math.max(0, currentStep - 1))} disabled={currentStep === 0}>
-          {t('previous')}
-        </Button>
+        {currentStep > 0 ? (
+          <Button
+            variant="outline"
+            onClick={() => setCurrentStep(currentStep - 1)}
+          >
+            <ArrowLeft className="w-4 h-4 mr-1.5" />
+            {t('previous')}
+          </Button>
+        ) : (
+          <div />
+        )}
         {currentStep < stepKeys.length - 1 ? (
           <Button onClick={handleNext}>{t('next')}</Button>
         ) : (

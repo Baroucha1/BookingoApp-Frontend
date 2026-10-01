@@ -18,6 +18,7 @@ const PARTNER_IATA_CODES: Record<string, string> = {
     'TUI fly Belgium': 'TB',
     'Tunisair': 'TU',
     'Volotea': 'V7',
+    'Pegasus': 'PC',
 };
 
 export interface AirlineOption {
@@ -30,7 +31,9 @@ export const AIRLINES: AirlineOption[] = partners
     .map((p) => {
         const code = PARTNER_IATA_CODES[p.name];
         if (!code) {
-            console.warn(`[airlines] no IATA code mapped for partner "${p.name}" — excluded from AIRLINES list`);
+            if (p.name !== 'Domestic Airlines') {
+                console.warn(`[airlines] no IATA code mapped for partner "${p.name}" — excluded from AIRLINES list`);
+            }
             return null;
         }
         return {

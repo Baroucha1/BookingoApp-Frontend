@@ -1,60 +1,80 @@
-import {AggregatedDestination, getAggregatedDestinations} from "@/service/flights_aggregator/aggregatedSearch.service";
+import { AggregatedDestination, getAggregatedDestinations } from "@/service/flights_aggregator/aggregatedSearch.service";
 import { AggregatedSearchParams, CabinClass } from "@/service/flights_aggregator/aggregatedTypes";
-import {useCallback, useEffect, useRef, useState} from "react";
-import {Airport, FALLBACK_AIRPORTS, searchAirports, searchAirportsFallback} from "@/service/flights/airports.ts";
-import {cn} from "@/lib/utils.ts";
+import React, { forwardRef, useCallback, useEffect, useRef, useState } from "react";
+import { Airport, FALLBACK_AIRPORTS, searchAirports, searchAirportsFallback } from "@/service/flights/airports.ts";
+import { cn } from "@/lib/utils.ts";
 import {
     Calendar,
     Check,
     Clock,
     Loader2,
     MapPin,
-
 } from "lucide-react";
-import {getAirlineLogo, getAirlineName} from "@/service/flights/airlines.ts";
+import { getAirlineLogo, getAirlineName } from "@/service/flights/airlines.ts";
 import { createPortal } from 'react-dom';
 import { ArrowLeft } from 'lucide-react';
+import { useLanguage } from '@/i18n/LanguageContext';
+import { toast } from '@/hooks/use-toast';
 import {
     toLocalISO, today, addMonths, buildMonthDays,
     emptyLeg, defaultForm, RECENT_KEY, getRecentAirports, saveRecentAirport,
     getDayState,
 } from './SearchFormUtils.ts';
 import type { Leg, FormState, DayState } from './SearchFormUtils';
-import { useLanguage } from '@/i18n/LanguageContext';
 
 
 export interface AirportInputProps {
     value: string;
     onChange: (code: string, airport?: Airport) => void;
     placeholder: string;
-    hintType?: 'origin' | 'destination';
     selectedAirport?: Airport | null;
     onShowAllDestinations?: () => void;
 }
 
-export function Tile({ icon, label, children, className, onClick }: {
-    icon: React.ReactNode; label: string; children: React.ReactNode; className?: string; onClick?: () => void;
-}) {
+export interface TileProps extends React.HTMLAttributes<HTMLDivElement> {
+    icon: React.ReactNode;
+    label: string;
+    children: React.ReactNode;
+    className?: string;
+    onClick?: () => void;
+    required?: boolean;
+    error?: boolean | string;
+}
+
+export const Tile = forwardRef<HTMLDivElement, TileProps>(({ icon, label, children, className, onClick, required, error, ...props }, ref) => {
     return (
         <div
+            ref={ref}
             onClick={onClick}
             className={cn(
-                'relative flex items-start gap-2 px-4 py-2 bg-white rounded border border-[#1775FF] shadow-sm hover:shadow-md transition-shadow min-h-[60px]',
+                'relative flex items-start gap-2.5 px-4 py-2.5 bg-white dark:bg-slate-800/90 rounded-2xl border shadow-xs transition-all min-h-[64px]',
+                error
+                    ? 'border-red-400 dark:border-red-500 ring-1 ring-red-400/40 bg-red-50/20'
+                    : 'border-slate-200/90 dark:border-slate-700/80 hover:border-[#1775FF] hover:shadow-md',
                 onClick && 'cursor-pointer',
                 className,
             )}
+            {...props}
         >
-            <div className="mt-0.5 text-[#F5A623] shrink-0">{icon}</div>
+            <div className="mt-1 text-[#FFAA01] shrink-0">{icon}</div>
             <div className="min-w-0 flex-1">
-                <div className="text-[10px] uppercase tracking-widest text-[#94A3B8] mb-0.5 font-medium">{label}</div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-0.5 flex items-center justify-between">
+                    <span>
+                        {label}
+                        {required && <span className="text-red-500 font-bold ml-0.5">*</span>}
+                    </span>
+                    {typeof error === 'string' && error && (
+                        <span className="text-red-500 text-[10px] font-medium ml-1 truncate">{error}</span>
+                    )}
+                </div>
                 {children}
             </div>
         </div>
     );
-}
+});
+Tile.displayName = 'Tile';
 
-export function AirportInput({ value, onChange, placeholder, hintType, selectedAirport, onShowAllDestinations }: AirportInputProps) {
-    const { t } = useLanguage();
+export function AirportInput({ value, onChange, placeholder, selectedAirport, onShowAllDestinations }: AirportInputProps) {
     const [query, setQuery] = useState(value);
     const [suggestions, setSuggestions] = useState<Airport[]>([]);
     const [loading, setLoading] = useState(false);
@@ -62,7 +82,7 @@ export function AirportInput({ value, onChange, placeholder, hintType, selectedA
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const wrapRef = useRef<HTMLDivElement>(null);
 
-    const ROUTE_HINTS = hintType === 'destination'
+    const ROUTE_HINTS = placeholder.includes('allez')
         ? ['Paris CDG', 'Dubai DXB', 'Istanbul IST', 'Doha DOH', 'Londres LHR']
         : ['Alger ALG', 'Oran ORN', 'Constantine CZL', 'Annaba AAE', 'Béjaïa BJA'];
     const [hintIdx, setHintIdx] = useState(0);
@@ -75,11 +95,15 @@ export function AirportInput({ value, onChange, placeholder, hintType, selectedA
     useEffect(() => { setQuery(value); }, [value]);
 
     useEffect(() => {
-        const handler = (e: MouseEvent) => {
+        const handler = (e: MouseEvent | TouchEvent) => {
             if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
         };
         document.addEventListener('mousedown', handler);
-        return () => document.removeEventListener('mousedown', handler);
+        document.addEventListener('touchstart', handler);
+        return () => {
+            document.removeEventListener('mousedown', handler);
+            document.removeEventListener('touchstart', handler);
+        };
     }, []);
 
     const fetchAirports = useCallback(async (kw: string) => {
@@ -146,8 +170,10 @@ export function AirportInput({ value, onChange, placeholder, hintType, selectedA
             {open && (
                 <div className="absolute z-50 left-0 w-full min-w-[280px] mt-3 bg-white border border-[#E2E8F0] rounded-2xl shadow-2xl max-h-72 overflow-y-auto">
                     {suggestions.map((a) => (
-                        <button key={a.code} type="button" onMouseDown={() => handleSelect(a)}
-                                className="w-full px-4 py-3 hover:bg-[#FFF9F0] flex items-center justify-between gap-3 text-left border-b border-[#F1F5F9] last:border-0 transition">
+                        <button key={a.code} type="button"
+                            onMouseDown={(e) => { e.preventDefault(); handleSelect(a); }}
+                            onTouchEnd={(e) => { e.preventDefault(); handleSelect(a); }}
+                            className="w-full px-4 py-3 hover:bg-[#FFF9F0] active:bg-[#FFF3E0] flex items-center justify-between gap-3 text-left border-b border-[#F1F5F9] last:border-0 transition">
                             <div className="flex items-center gap-3 min-w-0">
                                 {getRecentAirports().find((r) => r.code === a.code) && <Clock className="w-4 h-4 text-[#3D8BF0] shrink-0" />}
                                 <MapPin className="w-4 h-4 text-[#A0AEC0] shrink-0" />
@@ -163,10 +189,11 @@ export function AirportInput({ value, onChange, placeholder, hintType, selectedA
                     {onShowAllDestinations && (
                         <button
                             type="button"
-                            onMouseDown={() => { onShowAllDestinations(); setOpen(false); }}
-                            className="w-full px-4 py-3 flex items-center gap-2 text-left text-sm font-medium text-[#3D8BF0] hover:bg-[#FFF9F0] transition"
+                            onMouseDown={(e) => { e.preventDefault(); onShowAllDestinations(); setOpen(false); }}
+                            onTouchEnd={(e) => { e.preventDefault(); onShowAllDestinations(); setOpen(false); }}
+                            className="w-full px-4 py-3 flex items-center gap-2 text-left text-sm font-medium text-[#3D8BF0] hover:bg-[#FFF9F0] active:bg-[#FFF3E0] transition"
                         >
-                            🌐 {t('flightAllDestinations')}
+                            🌐 Voir toutes les destinations
                         </button>
                     )}
                 </div>
@@ -210,19 +237,12 @@ function DayCell({ date, state, onPick }: { date: Date; state: DayState; onPick:
 function MonthGrid({ month, start, end, floor, onPick, header }: {
     month: Date; start: Date | null; end: Date | null; floor: Date; onPick: (d: Date) => void; header: React.ReactNode;
 }) {
-    const { language } = useLanguage();
     const days = buildMonthDays(month);
-    const weekStart = new Date(2024, 0, 1);
-    const weekdays = Array.from({ length: 7 }, (_, index) => {
-        const date = new Date(weekStart);
-        date.setDate(date.getDate() + index);
-        return new Intl.DateTimeFormat(language === 'ar' ? 'ar-DZ' : language === 'fr' ? 'fr-FR' : 'en-GB', { weekday: 'short' }).format(date);
-    });
     return (
         <div className="w-full">
             {header}
             <div className="grid grid-cols-7 mb-1">
-                {weekdays.map((d) => (
+                {['lu', 'ma', 'me', 'je', 've', 'sa', 'di'].map((d) => (
                     <div key={d} className="text-center text-[10px] text-[#94A3B8] font-medium py-1">{d}</div>
                 ))}
             </div>
@@ -237,8 +257,8 @@ function MonthGrid({ month, start, end, floor, onPick, header }: {
     );
 }
 
-export function SingleDatePicker({ value, onChange, label, minDate }: {
-    value: string; onChange: (v: string) => void; label?: string; minDate?: string;
+export function SingleDatePicker({ value, onChange, label, minDate, error, required }: {
+    value: string; onChange: (v: string) => void; label?: string; minDate?: string; error?: boolean | string; required?: boolean;
 }) {
     return (
         <DateRangePicker
@@ -246,8 +266,11 @@ export function SingleDatePicker({ value, onChange, label, minDate }: {
             startDate={value}
             endDate=""
             onChangeStart={onChange}
-            onChangeEnd={() => {}}     // unused in single mode
+            onChangeEnd={() => { }}     // unused in single mode
             minDate={minDate}
+            label={label}
+            error={error}
+            required={required}
         />
     );
 }
@@ -257,11 +280,13 @@ export function Chip({ active, onClick, icon, label }: { active: boolean; onClic
             type="button"
             onClick={onClick}
             className={cn(
-                'inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs border transition-all font-medium',
-                active ? 'bg-[#EFF6FF] text-[#0454E8] border-[#FFAA01]' : 'bg-white text-[#0454E8] border-[#0454E8] hover:border-[#FFAA01]/30',
+                'inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs transition-all font-semibold active:scale-95 border',
+                active
+                    ? 'bg-blue-50 dark:bg-blue-950/60 text-[#0454E8] dark:text-blue-400 border-[#0454E8] shadow-xs'
+                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300',
             )}
         >
-            {active ? <Check className="w-3 h-3" /> : icon}
+            {active ? <Check className="w-3 h-3 text-[#0454E8] dark:text-blue-400" /> : icon}
             {label}
         </button>
     );
@@ -276,7 +301,6 @@ function DesktopRangeCalendar({ mode, startDate, endDate, onSelectStart, onSelec
     onClose: () => void;
     minDate?: string;
 }) {
-    const { language } = useLanguage();
     const floor = minDate ? new Date(minDate + 'T00:00:00') : (() => { const t = new Date(); t.setHours(0, 0, 0, 0); return t; })();
     const initial = startDate ? new Date(startDate + 'T00:00:00') : new Date();
     const [viewMonth, setViewMonth] = useState(new Date(initial.getFullYear(), initial.getMonth(), 1));
@@ -300,7 +324,7 @@ function DesktopRangeCalendar({ mode, startDate, endDate, onSelectStart, onSelec
                     <button type="button" onClick={() => setViewMonth(addMonths(viewMonth, -1))} className="w-7 h-7 rounded-full hover:bg-[#F1F5F9] text-[#64748B]">‹</button>
                 </div>
             ) : <div className="w-14" />}
-            <span className="text-sm font-semibold text-[#0B0F2E] capitalize">{m.toLocaleDateString(language === 'ar' ? 'ar-DZ' : language === 'fr' ? 'fr-FR' : 'en-GB', { month: 'long', year: 'numeric' })}</span>
+            <span className="text-sm font-semibold text-[#0B0F2E] capitalize">{m.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}</span>
             {showNext ? (
                 <div className="flex items-center gap-1">
                     <button type="button" onClick={() => setViewMonth(addMonths(viewMonth, 1))} className="w-7 h-7 rounded-full hover:bg-[#F1F5F9] text-[#64748B]">›</button>
@@ -326,7 +350,6 @@ function MobileDateSheet({ mode, startDate, endDate, onSelectStart, onSelectEnd,
     onClose: () => void;
     minDate?: string;
 }) {
-    const { t, language } = useLanguage();
     const floor = minDate ? new Date(minDate + 'T00:00:00') : (() => { const t = new Date(); t.setHours(0, 0, 0, 0); return t; })();
     const [active, setActive] = useState<'start' | 'end'>('start');
     const [localStart, setLocalStart] = useState(startDate);
@@ -352,16 +375,20 @@ function MobileDateSheet({ mode, startDate, endDate, onSelectStart, onSelectEnd,
     };
 
     const canConfirm = mode === 'single' ? !!localStart : !!localStart && !!localEnd;
-    const locale = language === 'ar' ? 'ar-DZ' : language === 'fr' ? 'fr-FR' : 'en-GB';
-    const fmt = (v: string) => v ? new Date(v + 'T00:00:00').toLocaleDateString(locale, { day: 'numeric', month: 'short' }) : '—';
+    const fmt = (v: string) => v ? new Date(v + 'T00:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '—';
 
     return createPortal(
-        <div className="fixed inset-0 z-[9999] bg-white flex flex-col">
-            <div className="ios-date-sheet-header flex items-center gap-3 px-4 py-3 pt-[calc(0.75rem+env(safe-area-inset-top,0px))] border-b border-[#F1F5F9] shrink-0">
+        <div 
+            className="fixed inset-0 z-[9999] bg-white flex flex-col"
+            style={{
+                paddingTop: 'env(safe-area-inset-top, 0px)',
+            }}
+        >
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-[#F1F5F9] shrink-0">
                 <button
                     type="button"
                     onClick={onClose}
-                    aria-label={t('flightBack')}
+                    aria-label="Retour"
                     className="w-9 h-9 -ml-1 rounded-full hover:bg-[#F1F5F9] flex items-center justify-center text-[#0B0F2E] shrink-0"
                 >
                     <ArrowLeft className="w-5 h-5" />
@@ -369,48 +396,53 @@ function MobileDateSheet({ mode, startDate, endDate, onSelectStart, onSelectEnd,
                 {mode === 'range' ? (
                     <div className="flex-1 flex items-center gap-6">
                         <button type="button" onClick={() => setActive('start')}
-                                className={cn('text-sm font-semibold pb-1 border-b-2', active === 'start' ? 'text-[#0454E8] border-[#0454E8]' : 'text-[#94A3B8] border-transparent')}>
-                            {t('flightDepartureDate')}{localStart && ` · ${fmt(localStart)}`}
+                            className={cn('text-sm font-semibold pb-1 border-b-2', active === 'start' ? 'text-[#0454E8] border-[#0454E8]' : 'text-[#94A3B8] border-transparent')}>
+                            Date de départ{localStart && ` · ${fmt(localStart)}`}
                         </button>
                         <button type="button" onClick={() => setActive('end')}
-                                className={cn('text-sm font-semibold pb-1 border-b-2', active === 'end' ? 'text-[#0454E8] border-[#0454E8]' : 'text-[#94A3B8] border-transparent')}>
-                            {t('flightReturnDate')}{localEnd && ` · ${fmt(localEnd)}`}
+                            className={cn('text-sm font-semibold pb-1 border-b-2', active === 'end' ? 'text-[#0454E8] border-[#0454E8]' : 'text-[#94A3B8] border-transparent')}>
+                            Date de retour{localEnd && ` · ${fmt(localEnd)}`}
                         </button>
                     </div>
                 ) : (
-                    <span className="text-sm font-semibold text-[#0B0F2E]">{t('flightDepartureDate')}</span>
+                    <span className="text-sm font-semibold text-[#0B0F2E]">Date de départ</span>
                 )}
             </div>
 
             <div className="flex-1 overflow-y-auto px-4 py-3 space-y-6">
                 {months.map((m) => (
                     <MonthGrid key={m.toISOString()} month={m}
-                               start={localStart ? new Date(localStart + 'T00:00:00') : null}
-                               end={mode === 'range' && localEnd ? new Date(localEnd + 'T00:00:00') : null}
-                               floor={floor} onPick={handlePick}
-                               header={<div className="text-sm font-semibold text-[#0B0F2E] capitalize mb-2">{m.toLocaleDateString(locale, { month: 'long', year: 'numeric' })}</div>} />
+                        start={localStart ? new Date(localStart + 'T00:00:00') : null}
+                        end={mode === 'range' && localEnd ? new Date(localEnd + 'T00:00:00') : null}
+                        floor={floor} onPick={handlePick}
+                        header={<div className="text-sm font-semibold text-[#0B0F2E] capitalize mb-2">{m.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}</div>} />
                 ))}
             </div>
 
-            <div className="p-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] border-t border-[#F1F5F9] shrink-0">
+            <div 
+                className="p-4 border-t border-[#F1F5F9] shrink-0"
+                style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)' }}
+            >
                 <button type="button" onClick={confirm} disabled={!canConfirm}
-                        className="w-full h-12 rounded-lg bg-[#0454E8] disabled:bg-[#CBD5E1] text-white font-semibold text-sm">
-                    {t('flightSelectDate')}
+                    className="w-full h-12 rounded-lg bg-[#0454E8] disabled:bg-[#CBD5E1] text-white font-semibold text-sm">
+                    Sélectionnez la date
                 </button>
             </div>
         </div>,
         document.body
     );
 }
-export function DateRangePicker({ tripType, startDate, endDate, onChangeStart, onChangeEnd, minDate }: {
+export function DateRangePicker({ tripType, startDate, endDate, onChangeStart, onChangeEnd, minDate, label, error, required }: {
     tripType: FormState['tripType'];
     startDate: string;
     endDate: string;
     onChangeStart: (v: string) => void;
     onChangeEnd: (v: string) => void;
     minDate?: string;
+    label?: string;
+    error?: boolean | string;
+    required?: boolean;
 }) {
-    const { language, t } = useLanguage();
     const [open, setOpen] = useState(false);
     const isMobile = useIsMobile();
     const ref = useRef<HTMLDivElement>(null);
@@ -453,26 +485,47 @@ export function DateRangePicker({ tripType, startDate, endDate, onChangeStart, o
         setPopoverPos({ top: rect.bottom + window.scrollY + 8, left });
     }, [open, isMobile]);
 
-    const locale = language === 'ar' ? 'ar-DZ' : language === 'fr' ? 'fr-FR' : 'en-GB';
-    const fmt = (v: string) => v ? new Date(v + 'T00:00:00').toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+    const { language } = useLanguage();
+    const dateLocale = language === 'ar' ? 'ar-DZ' : language === 'en' ? 'en-US' : 'fr-FR';
+    const fmt = (v: string) => v ? new Date(v + 'T00:00:00').toLocaleDateString(dateLocale, { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+    const defaultLabel = isRange
+        ? (language === 'ar' ? 'التواريخ' : language === 'en' ? 'Dates' : 'Dates')
+        : (language === 'ar' ? 'التاريخ' : language === 'en' ? 'Date' : 'Date');
+    const displayLabel = label || defaultLabel;
 
     return (
         <div ref={ref} className="relative">
             <div
                 onClick={() => (open ? closePicker() : openPicker())}
-                className="flex items-center gap-2 px-4 py-4 bg-white rounded border border-[#1775FF] shadow-sm cursor-pointer"
+                className={cn(
+                    'flex items-center gap-2.5 px-4 py-2.5 bg-white dark:bg-slate-800/90 rounded-2xl border shadow-xs transition-all cursor-pointer min-h-[64px]',
+                    error
+                        ? 'border-red-400 dark:border-red-500 ring-1 ring-red-400/40 bg-red-50/20'
+                        : 'border-slate-200/90 dark:border-slate-700/80 hover:border-[#1775FF] hover:shadow-md',
+                )}
             >
                 <Calendar className="w-4 h-4 text-[#F5A623] shrink-0" />
-                <div className="min-w-0 flex-1 text-sm font-bold text-[#0B0F2E]">
-                    {isRange
-                        ? `${fmt(startDate)} → ${endDate ? fmt(endDate) : ''}`
-                        : (startDate ? fmt(startDate) : '')}
+                <div className="min-w-0 flex-1">
+                    <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-0.5 flex items-center justify-between">
+                        <span>
+                            {displayLabel}
+                            {required && <span className="text-red-500 font-bold ml-0.5">*</span>}
+                        </span>
+                        {typeof error === 'string' && error && (
+                            <span className="text-red-500 text-[10px] font-medium ml-1 truncate">{error}</span>
+                        )}
+                    </div>
+                    <div className="text-sm font-bold text-[#0B0F2E] truncate">
+                        {isRange
+                            ? (startDate ? `${fmt(startDate)} → ${endDate ? fmt(endDate) : '—'}` : '—')
+                            : (startDate ? fmt(startDate) : '—')}
+                    </div>
                 </div>
             </div>
 
             {open && isMobile && (
                 <MobileDateSheet mode={isRange ? 'range' : 'single'} startDate={startDate} endDate={endDate}
-                                 onSelectStart={onChangeStart} onSelectEnd={onChangeEnd} onClose={closePicker} minDate={minDate} />
+                    onSelectStart={onChangeStart} onSelectEnd={onChangeEnd} onClose={closePicker} minDate={minDate} />
             )}
 
             {open && !isMobile && popoverPos && createPortal(
@@ -481,12 +534,12 @@ export function DateRangePicker({ tripType, startDate, endDate, onChangeStart, o
                     className="absolute z-[999] bg-white border border-[#E2E8F0] rounded-xl shadow-2xl"
                     style={{ top: popoverPos.top, left: popoverPos.left }}
                 >
-                    <button type="button" onClick={closePicker} aria-label={t('flightClose')}
-                            className="absolute top-2 right-2 w-7 h-7 rounded-full hover:bg-[#F1F5F9] flex items-center justify-center text-[#64748B] z-10">
+                    <button type="button" onClick={closePicker} aria-label="Fermer"
+                        className="absolute top-2 right-2 w-7 h-7 rounded-full hover:bg-[#F1F5F9] flex items-center justify-center text-[#64748B] z-10">
                         ✕
                     </button>
                     <DesktopRangeCalendar mode={isRange ? 'range' : 'single'} startDate={startDate} endDate={endDate}
-                                          onSelectStart={onChangeStart} onSelectEnd={onChangeEnd} onClose={closePicker} minDate={minDate} />
+                        onSelectStart={onChangeStart} onSelectEnd={onChangeEnd} onClose={closePicker} minDate={minDate} />
                 </div>,
                 document.body
             )}
@@ -508,7 +561,7 @@ export function AirlinePill({ code, name, logo, active, onClick }: {
         >
             <div className="w-5 h-5 rounded-full overflow-hidden bg-white border border-[#F1F5F9] flex items-center justify-center shrink-0">
                 <img src={logo} alt={name} className="w-full h-full object-cover"
-                     onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
             </div>
             {name}
         </button>
@@ -517,8 +570,8 @@ export function AirlinePill({ code, name, logo, active, onClick }: {
 
 
 
-import { X as CloseIcon,  Search as SearchIcon } from 'lucide-react';
-import {AirlineOption} from "@/data/airlines.ts";
+import { X as CloseIcon, Search as SearchIcon } from 'lucide-react';
+import { AirlineOption } from "@/data/airlines.ts";
 
 function AirlineChecklist({ airlines, selected, onToggle, search, setSearch }: {
     airlines: AirlineOption[];
@@ -527,7 +580,6 @@ function AirlineChecklist({ airlines, selected, onToggle, search, setSearch }: {
     search: string;
     setSearch: (v: string) => void;
 }) {
-    const { t } = useLanguage();
     const filtered = airlines.filter((a) => a.name.toLowerCase().includes(search.toLowerCase()));
 
     return (
@@ -537,7 +589,7 @@ function AirlineChecklist({ airlines, selected, onToggle, search, setSearch }: {
                 <input
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    placeholder={t('flightSearchAirline')}
+                    placeholder="Rechercher une compagnie"
                     className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-[#E2E8F0] text-sm outline-none focus:border-[#1775FF]"
                     autoFocus
                 />
@@ -547,12 +599,12 @@ function AirlineChecklist({ airlines, selected, onToggle, search, setSearch }: {
                     <label key={a.code} className="flex items-center gap-3 px-2 py-2.5 rounded-md hover:bg-[#F8FAFC] cursor-pointer">
                         <input type="checkbox" checked={selected.includes(a.code)} onChange={() => onToggle(a.code)} className="w-4 h-4 accent-[#0454E8] shrink-0" />
                         <img src={a.logo} alt="" className="w-6 h-6 rounded-full shrink-0"
-                             onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                         <span className="text-sm text-[#1A202C]">{a.name}</span>
                     </label>
                 ))}
                 {filtered.length === 0 && (
-                    <div className="text-sm text-[#94A3B8] px-2 py-6 text-center">{t('flightNoResults')}</div>
+                    <div className="text-sm text-[#94A3B8] px-2 py-6 text-center">Aucun résultat</div>
                 )}
             </div>
         </>
@@ -562,16 +614,21 @@ function AirlineChecklist({ airlines, selected, onToggle, search, setSearch }: {
 function AirlineDesktopModal({ airlines, selected, onToggle, onClose }: {
     airlines: AirlineOption[]; selected: string[]; onToggle: (code: string) => void; onClose: () => void;
 }) {
-    const { t } = useLanguage();
     const [search, setSearch] = useState('');
     return createPortal(
-        <div className="fixed inset-0 z-[999] bg-black/40 flex items-center justify-center p-4">
+        <div 
+            className="fixed inset-0 z-[999] bg-black/40 flex items-center justify-center p-4"
+            style={{
+                paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1rem)',
+                paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)',
+            }}
+        >
             <div className="absolute inset-0" onClick={onClose} />
             <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col">
                 <div className="flex items-center justify-between px-5 py-4 border-b border-[#F1F5F9] shrink-0">
-                    <span className="text-sm font-semibold text-[#0B0F2E]">{t('flightAirlines')}</span>
-                    <button type="button" onClick={onClose} aria-label={t('flightClose')}
-                            className="w-7 h-7 rounded-full hover:bg-[#F1F5F9] flex items-center justify-center text-[#64748B]">
+                    <span className="text-sm font-semibold text-[#0B0F2E]">Compagnies aériennes</span>
+                    <button type="button" onClick={onClose} aria-label="Fermer"
+                        className="w-7 h-7 rounded-full hover:bg-[#F1F5F9] flex items-center justify-center text-[#64748B]">
                         <CloseIcon className="w-4 h-4" />
                     </button>
                 </div>
@@ -580,8 +637,8 @@ function AirlineDesktopModal({ airlines, selected, onToggle, onClose }: {
                 </div>
                 <div className="p-4 border-t border-[#F1F5F9] shrink-0">
                     <button type="button" onClick={onClose}
-                            className="w-full h-11 rounded-lg bg-[#0454E8] text-white font-semibold text-sm">
-                        {t('flightValidate')}
+                        className="w-full h-11 rounded-lg bg-[#0454E8] text-white font-semibold text-sm">
+                        Valider
                     </button>
                 </div>
             </div>
@@ -593,24 +650,31 @@ function AirlineDesktopModal({ airlines, selected, onToggle, onClose }: {
 function AirlineMobileSheet({ airlines, selected, onToggle, onClose }: {
     airlines: AirlineOption[]; selected: string[]; onToggle: (code: string) => void; onClose: () => void;
 }) {
-    const { t } = useLanguage();
     const [search, setSearch] = useState('');
     return createPortal(
-        <div className="fixed inset-0 z-[9999] bg-white flex flex-col">
-            <div className="flex items-center gap-3 px-4 py-3 pt-[calc(0.75rem+env(safe-area-inset-top,0px))] border-b border-[#F1F5F9] shrink-0">
-                <button type="button" onClick={onClose} aria-label={t('flightBack')}
-                        className="w-9 h-9 -ml-1 rounded-full hover:bg-[#F1F5F9] flex items-center justify-center text-[#0B0F2E] shrink-0">
+        <div 
+            className="fixed inset-0 z-[9999] bg-white flex flex-col"
+            style={{
+                paddingTop: 'env(safe-area-inset-top, 0px)',
+            }}
+        >
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-[#F1F5F9] shrink-0">
+                <button type="button" onClick={onClose} aria-label="Retour"
+                    className="w-9 h-9 -ml-1 rounded-full hover:bg-[#F1F5F9] flex items-center justify-center text-[#0B0F2E] shrink-0">
                     <ArrowLeft className="w-5 h-5" />
                 </button>
-                <span className="text-sm font-semibold text-[#0B0F2E]">{t('flightAirlines')}</span>
+                <span className="text-sm font-semibold text-[#0B0F2E]">Compagnies aériennes</span>
             </div>
             <div className="flex-1 overflow-y-auto px-4 py-3">
                 <AirlineChecklist airlines={airlines} selected={selected} onToggle={onToggle} search={search} setSearch={setSearch} />
             </div>
-            <div className="p-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] border-t border-[#F1F5F9] shrink-0">
+            <div 
+                className="p-4 border-t border-[#F1F5F9] shrink-0"
+                style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)' }}
+            >
                 <button type="button" onClick={onClose}
-                        className="w-full h-12 rounded-lg bg-[#0454E8] text-white font-semibold text-sm">
-                    {t('flightValidate')}
+                    className="w-full h-12 rounded-lg bg-[#0454E8] text-white font-semibold text-sm">
+                    Valider
                 </button>
             </div>
         </div>,
@@ -623,7 +687,6 @@ export function AirlineFilterRow({ airlines, selected, onToggle }: {
     selected: string[];
     onToggle: (code: string) => void;
 }) {
-    const { t } = useLanguage();
     const [open, setOpen] = useState(false);
     const isMobile = useIsMobile();
 
@@ -636,7 +699,7 @@ export function AirlineFilterRow({ airlines, selected, onToggle }: {
         <div className="flex items-center gap-2 flex-wrap">
             {visibleAirlines.map((a) => (
                 <AirlinePill key={a.code} code={a.code} name={a.name} logo={a.logo}
-                             active={selected.includes(a.code)} onClick={() => onToggle(a.code)} />
+                    active={selected.includes(a.code)} onClick={() => onToggle(a.code)} />
             ))}
 
             {overflowCount > 0 && (
@@ -650,7 +713,7 @@ export function AirlineFilterRow({ airlines, selected, onToggle }: {
                             : 'border-[#E2E8F0] bg-white text-[#4A5568] hover:border-[#3D8BF0]/40'
                     )}
                 >
-                    +{overflowCount} {t('flightMore')}
+                    +{overflowCount} autres
                 </button>
             )}
 
@@ -664,39 +727,59 @@ export function AirlineFilterRow({ airlines, selected, onToggle }: {
     );
 }
 
+const tripLabels = {
+    fr: {
+        oneway: { label: 'Aller Simple', mobile: 'Aller simple' },
+        roundtrip: { label: 'Aller-Retour', mobile: 'Aller-retour' },
+        multicity: { label: 'Multi-Destinations', mobile: 'Multi-dest.' },
+    },
+    en: {
+        oneway: { label: 'One-Way', mobile: 'One-way' },
+        roundtrip: { label: 'Round-Trip', mobile: 'Round-trip' },
+        multicity: { label: 'Multi-City', mobile: 'Multi-dest.' },
+    },
+    ar: {
+        oneway: { label: 'ذهاب فقط', mobile: 'ذهاب' },
+        roundtrip: { label: 'ذهاب وعودة', mobile: 'ذهاب وعودة' },
+        multicity: { label: 'وجهات متعددة', mobile: 'وجهات' },
+    },
+};
+
 export function TripTypeToggle({ value, onChange }: { value: FormState['tripType']; onChange: (v: FormState['tripType']) => void }) {
-    const { t } = useLanguage();
-    const options: { key: FormState['tripType']; label: string }[] = [
-        { key: 'oneway', label: t('flightOneWay') },
-        { key: 'roundtrip', label: t('flightRoundTrip') },
-        { key: 'multicity', label: t('flightMultiCity') },
+    const { language } = useLanguage();
+    const t = tripLabels[language] || tripLabels.fr;
+
+    const options: { key: FormState['tripType']; label: string; mobileLabel: string }[] = [
+        { key: 'oneway', label: t.oneway.label, mobileLabel: t.oneway.mobile },
+        { key: 'roundtrip', label: t.roundtrip.label, mobileLabel: t.roundtrip.mobile },
+        { key: 'multicity', label: t.multicity.label, mobileLabel: t.multicity.mobile },
     ];
     return (
-        <div className="flex items-center gap-4 sm:gap-6 overflow-x-auto pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-            {options.map((o) => (
-                <button
-                    key={o.key}
-                    type="button"
-                    onClick={() => onChange(o.key)}
-                    className="group flex items-center gap-1 text-xs sm:text-sm font-semibold text-[#0454E8] shrink-0 whitespace-nowrap"
-                >
-                    <span
+        <div className="w-full sm:w-auto grid grid-cols-3 sm:inline-flex p-1 bg-slate-100/90 dark:bg-slate-800/90 rounded-full border border-slate-200/70 dark:border-slate-700 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+            {options.map((o) => {
+                const active = value === o.key;
+                return (
+                    <button
+                        key={o.key}
+                        type="button"
+                        onClick={() => onChange(o.key)}
                         className={cn(
-                            'w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors shrink-0',
-                            value === o.key ? 'border-[#0454E8]' : 'border-[#0454E8] group-hover:border-[#F5A623]'
+                            'w-full sm:w-auto px-2.5 sm:px-4 py-1.5 rounded-full text-[11px] sm:text-xs md:text-sm font-bold transition-all duration-200 text-center truncate select-none',
+                            active
+                                ? 'bg-[#1775FF] text-white shadow-md shadow-blue-500/25 scale-[1.02]'
+                                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-slate-700/50'
                         )}
                     >
-                        {value === o.key && <span className="w-2 h-2 rounded-full bg-[#F5A623]" />}
-                    </span>
-                    <span className="transition-colors group-hover:text-[#FFAA01]">{o.label}</span>
-                </button>
-            ))}
+                        <span className="sm:hidden">{o.mobileLabel}</span>
+                        <span className="hidden sm:inline">{o.label}</span>
+                    </button>
+                );
+            })}
         </div>
     );
 }
 
 export function useAggregatedSearchFormState(onSubmit: (p: AggregatedSearchParams) => void) {
-    const { t } = useLanguage();
     const [depAirport, setDepAirport] = useState<Airport | null>(null);
     const [destAirport, setDestAirport] = useState<Airport | null>(null);
     const [destinations, setDestinations] = useState<AggregatedDestination[]>([]);
@@ -704,6 +787,9 @@ export function useAggregatedSearchFormState(onSubmit: (p: AggregatedSearchParam
     const [showAllDestinations, setShowAllDestinations] = useState(false);
     const [destinationPickerTarget, setDestinationPickerTarget] = useState<'origin' | 'destination'>('destination');
     const [p, setP] = useState<FormState>(defaultForm);
+
+    const [attemptedSubmit, setAttemptedSubmit] = useState(false);
+    const { t, language } = useLanguage();
 
     const updateLeg = (index: number, patch: Partial<Leg>) => {
         setP((prev) => {
@@ -738,10 +824,31 @@ export function useAggregatedSearchFormState(onSubmit: (p: AggregatedSearchParam
         setP((prev) => (prev.legs.length <= 1 ? prev : { ...prev, legs: prev.legs.filter((_, i) => i !== index) }));
     };
 
-    const returnDateMissing = p.tripType === 'roundtrip' && !p.retourleVol1;
+    const originMissing = p.tripType !== 'multicity' && (!p.departVol1 || !p.departVol1.trim());
+    const destMissing = p.tripType !== 'multicity' && (!p.destinationVol1 || !p.destinationVol1.trim());
+    const sameAirport = p.tripType !== 'multicity' && Boolean(
+        p.departVol1 && p.destinationVol1 && p.departVol1.trim().toUpperCase() === p.destinationVol1.trim().toUpperCase()
+    );
+    const departDateMissing = p.tripType !== 'multicity' && (!p.departleVol1 || !p.departleVol1.trim());
+    const returnDateMissing = p.tripType === 'roundtrip' && (!p.retourleVol1 || !p.retourleVol1.trim());
     const multiCityIncomplete =
         p.tripType === 'multicity' &&
-        (p.legs.length < 2 || p.legs.some((leg) => !leg.origin || !leg.destination || !leg.date));
+        (p.legs.length < 2 || p.legs.some((leg) =>
+            !leg.origin || !leg.destination || !leg.date ||
+            leg.origin.trim().toUpperCase() === leg.destination.trim().toUpperCase()
+        ));
+
+    const adultMissing = p.qteADT < 1;
+    const infantExcess = p.qteINF > p.qteADT;
+    const passengerError =
+        infantExcess
+            ? t('infantError')
+            : adultMissing
+                ? (language === 'ar' ? 'مطلوب مسافر بالغ واحد على الأقل' : language === 'en' ? 'At least 1 adult is required' : 'Au moins 1 adulte est obligatoire')
+                : null;
+
+    const isFormIncomplete =
+        originMissing || destMissing || sameAirport || departDateMissing || returnDateMissing || multiCityIncomplete || Boolean(passengerError);
 
     useEffect(() => {
         getAggregatedDestinations()
@@ -773,16 +880,74 @@ export function useAggregatedSearchFormState(onSubmit: (p: AggregatedSearchParam
     const passengerLabel = () => {
         const total = p.qteADT + p.qteCHD + p.qteINF;
         const classeMap: Record<string, string> = {
-            Y: t('flightClassEconomy'), C: t('flightClassBusiness'), F: t('flightClassFirst'), W: t('flightClassPremium'),
+            Y: t('economy'),
+            W: t('premium'),
+            C: t('businessClass') || t('business'),
+            F: t('first'),
         };
         return { count: total, classe: classeMap[p.classe] ?? p.classe };
     };
 
-    const passengerError = p.qteINF > p.qteADT ? t('flightInfantLimit') : null;
-
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (passengerError || multiCityIncomplete || returnDateMissing) return;
+        setAttemptedSubmit(true);
+
+        if (originMissing) {
+            toast({
+                title: language === 'ar' ? 'حقل إجباري' : language === 'en' ? 'Required field' : 'Champ obligatoire',
+                description: language === 'ar' ? 'يرجى اختيار مطار المغادرة' : language === 'en' ? 'Please select a departure airport' : 'Veuillez sélectionner un aéroport de départ',
+                variant: 'destructive',
+            });
+            return;
+        }
+        if (destMissing) {
+            toast({
+                title: language === 'ar' ? 'حقل إجباري' : language === 'en' ? 'Required field' : 'Champ obligatoire',
+                description: language === 'ar' ? 'يرجى اختيار مطار الوصول' : language === 'en' ? 'Please select a destination airport' : 'Veuillez sélectionner un aéroport de destination',
+                variant: 'destructive',
+            });
+            return;
+        }
+        if (sameAirport) {
+            toast({
+                title: language === 'ar' ? 'خطأ في المسار' : language === 'en' ? 'Invalid route' : 'Itinéraire invalide',
+                description: language === 'ar' ? 'يجب أن يكون مطار المغادرة مختلفاً عن الوصول' : language === 'en' ? 'Departure and destination must be different' : 'Le départ et la destination doivent être différents',
+                variant: 'destructive',
+            });
+            return;
+        }
+        if (departDateMissing) {
+            toast({
+                title: language === 'ar' ? 'حقل إجباري' : language === 'en' ? 'Required field' : 'Champ obligatoire',
+                description: language === 'ar' ? 'يرجى اختيار تاريخ المغادرة' : language === 'en' ? 'Please select a departure date' : 'Veuillez choisir une date de départ',
+                variant: 'destructive',
+            });
+            return;
+        }
+        if (returnDateMissing) {
+            toast({
+                title: language === 'ar' ? 'حقل إجباري' : language === 'en' ? 'Required field' : 'Champ obligatoire',
+                description: language === 'ar' ? 'يرجى اختيار تاريخ العودة' : language === 'en' ? 'Please select a return date' : 'Veuillez choisir une date de retour',
+                variant: 'destructive',
+            });
+            return;
+        }
+        if (multiCityIncomplete) {
+            toast({
+                title: language === 'ar' ? 'حقل إجباري' : language === 'en' ? 'Required field' : 'Champ obligatoire',
+                description: language === 'ar' ? 'يرجى إكمال جميع مراحل الرحلة واختيار تواريخ ومطارات صالحة' : language === 'en' ? 'Please complete all flight legs with valid airports and dates' : 'Veuillez compléter toutes les étapes du voyage avec des aéroports et dates valides',
+                variant: 'destructive',
+            });
+            return;
+        }
+        if (passengerError) {
+            toast({
+                title: language === 'ar' ? 'خطأ' : language === 'en' ? 'Error' : 'Erreur',
+                description: passengerError,
+                variant: 'destructive',
+            });
+            return;
+        }
 
         if (p.tripType === 'multicity') {
             onSubmit({
@@ -806,5 +971,6 @@ export function useAggregatedSearchFormState(onSubmit: (p: AggregatedSearchParam
         showAllDestinations, setShowAllDestinations, destinationPickerTarget, setDestinationPickerTarget,
         updateLeg, addLeg, removeLeg, swap, toggleAirline, isDestinationSupported,
         returnDateMissing, multiCityIncomplete, passengerError, handleSubmit, passengerLabel,
+        attemptedSubmit, setAttemptedSubmit, originMissing, destMissing, sameAirport, departDateMissing, isFormIncomplete,
     };
 }

@@ -7,6 +7,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { initiateSatimPayment } from '@/service/payment.service';
+import AppLoading from '@/components/common/AppLoading';
 
 declare global { interface Window { grecaptcha: any; } }
 
@@ -35,9 +36,11 @@ const PayApplication = () => {
 
     const recaptchaRef      = useRef<HTMLDivElement>(null);
     const recaptchaWidgetId = useRef<number | null>(null);
+    const skipRecaptcha     = import.meta.env.VITE_SKIP_RECAPTCHA === 'true';
 
     // ── Load reCAPTCHA script ─────────────────────────────────────────────────
     useEffect(() => {
+        if (skipRecaptcha) return;
         if (document.getElementById('recaptcha-script')) return;
         const script   = document.createElement('script');
         script.id      = 'recaptcha-script';
@@ -45,20 +48,25 @@ const PayApplication = () => {
         script.async   = true;
         script.defer   = true;
         document.head.appendChild(script);
-    }, []);
+    }, [skipRecaptcha]);
 
     useEffect(() => {
+        if (skipRecaptcha) return;
         const tryRender = () => {
             if (!window.grecaptcha || !recaptchaRef.current) { setTimeout(tryRender, 300); return; }
             if (recaptchaWidgetId.current !== null) return;
-            recaptchaWidgetId.current = window.grecaptcha.render(recaptchaRef.current, {
-                sitekey:            import.meta.env.VITE_RECAPTCHA_SITE_KEY,
-                callback:           () => setCaptchaVerified(true),
-                'expired-callback': () => setCaptchaVerified(false),
-            });
+            try {
+                recaptchaWidgetId.current = window.grecaptcha.render(recaptchaRef.current, {
+                    sitekey:            import.meta.env.VITE_RECAPTCHA_SITE_KEY,
+                    callback:           () => setCaptchaVerified(true),
+                    'expired-callback': () => setCaptchaVerified(false),
+                });
+            } catch (e) {
+                console.warn('reCAPTCHA render notice:', e);
+            }
         };
         if (!loading) setTimeout(tryRender, 300);
-    }, [loading]);
+    }, [loading, skipRecaptcha]);
 
     // ── Fetch application ─────────────────────────────────────────────────────
     useEffect(() => {
@@ -83,25 +91,41 @@ const PayApplication = () => {
     const handlePay = async () => {
         setSubmitting(true);
         try {
-            const captchaToken = window.grecaptcha.getResponse(recaptchaWidgetId.current);
-            if (!captchaToken) {
-                toast({ title: 'reCAPTCHA requis', description: 'Veuillez valider le reCAPTCHA.', variant: 'destructive' });
-                setSubmitting(false);
-                return;
+            let captchaToken = '';
+            if (!skipRecaptcha) {
+                if (window.grecaptcha?.getResponse) {
+                    try {
+                        captchaToken = recaptchaWidgetId.current !== null
+                            ? window.grecaptcha.getResponse(recaptchaWidgetId.current)
+                            : window.grecaptcha.getResponse();
+                    } catch {
+                        captchaToken = '';
+                    }
+                }
+                if (!captchaToken) {
+                    toast({ title: 'reCAPTCHA requis', description: 'Veuillez valider le reCAPTCHA avant de continuer.', variant: 'destructive' });
+                    setSubmitting(false);
+                    return;
+                }
             }
-            const { formUrl } = await initiateSatimPayment(applicationId!, captchaToken);
+            if (!applicationId) {
+                throw new Error("Identifiant de la demande introuvable.");
+            }
+            const { formUrl } = await initiateSatimPayment(applicationId, captchaToken);
             window.location.href = formUrl;
         } catch (err: any) {
-            toast({ title: 'Erreur SATIM', description: err.message, variant: 'destructive' });
+            const rawMsg = err?.message ?? '';
+            const msg = (rawMsg && rawMsg !== 'null' && rawMsg !== '[object Object]')
+                ? rawMsg
+                : "Une erreur est survenue lors de l'initiation du paiement SATIM.";
+            toast({ title: 'Erreur SATIM', description: msg, variant: 'destructive' });
             setSubmitting(false);
         }
     };
 
     // ── Loading ───────────────────────────────────────────────────────────────
     if (loading) return (
-        <div className="min-h-screen flex items-center justify-center">
-            <Loader2 className="w-8 h-8 animate-spin text-primary" />
-        </div>
+        <AppLoading message="Chargement de votre dossier de paiement..." />
     );
 
     if (!application) return null;
@@ -109,16 +133,25 @@ const PayApplication = () => {
     const visa       = application.visaType;
     const country    = visa?.country;
     const total      = Number(visa?.price ?? 0) * (application.numberOfPeople ?? 1);
-    const canPay     = termsAccepted && captchaVerified && !submitting;
+    const canPay     = termsAccepted && (skipRecaptcha || captchaVerified) && !submitting;
 
     return (
-        <div className="min-h-screen py-8" style={{ background: '#F4F6FA' }}>
+        <div
+            className="min-h-screen pb-8"
+            style={{
+                background: '#F4F6FA',
+                paddingTop: 'calc(env(safe-area-inset-top, 0px) + 2rem)',
+            }}
+        >
             <div className="max-w-2xl mx-auto px-4 space-y-4">
 
                 {/* ── Back ── */}
-                <button onClick={() => navigate('/client/applications')}
-                        className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-800 transition-colors">
-                    <ArrowLeft className="w-4 h-4" /> Retour aux demandes
+                <button
+                    onClick={() => window.history.length > 1 ? navigate(-1) : navigate('/client/applications')}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-gray-200 text-gray-700 hover:text-[#0865FE] hover:border-[#0865FE]/30 font-semibold text-xs shadow-xs hover:shadow-sm transition-all cursor-pointer"
+                >
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    <span>Retour aux demandes</span>
                 </button>
 
                 {/* ── Recap card ── */}
@@ -217,9 +250,11 @@ const PayApplication = () => {
                     </label>
 
                     {/* reCAPTCHA */}
-                    <div className="flex justify-center">
-                        <div ref={recaptchaRef} />
-                    </div>
+                    {!skipRecaptcha && (
+                        <div className="flex justify-center">
+                            <div ref={recaptchaRef} />
+                        </div>
+                    )}
 
                     {/* CTA */}
                     <div className="rounded-2xl p-5 flex items-center justify-between gap-4" style={{ background: '#0865FE' }}>

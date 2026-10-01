@@ -11,8 +11,7 @@ import {
     type CustomPayment,
 } from '@/service/payment.service.ts';
 import {useNavigate} from "react-router-dom";
-import { useLanguage } from '@/i18n/LanguageContext';
-import type { TranslationKey } from '@/i18n/translations';
+import AppLoading from '@/components/common/AppLoading';
 
 const statusBadge: Record<string, string> = {
     PAID:    'bg-green-100 text-green-800 border-green-300',
@@ -20,14 +19,13 @@ const statusBadge: Record<string, string> = {
     FAILED:  'bg-red-100 text-red-800 border-red-300',
 };
 
-const statusLabel: Record<string, TranslationKey> = {
-    PAID:    'paid',
-    PENDING: 'clientStatusPending',
-    FAILED:  'clientAppsPaymentFailed',
+const statusLabel: Record<string, string> = {
+    PAID:    'Payé',
+    PENDING: 'En attente',
+    FAILED:  'Échec',
 };
 
 const ClientCustomPayments = () => {
-    const { t, language } = useLanguage();
     const { user } = useAuth();
     const navigate = useNavigate();
     const [payments, setPayments] = useState<CustomPayment[]>([]);
@@ -37,7 +35,7 @@ const ClientCustomPayments = () => {
     const loadPayments = (clientId: string) => {
         getClientCustomPayments(clientId)
             .then(data => setPayments(data))
-            .catch(err => setError(err.message ?? t('clientCustomPaymentsError')))
+            .catch(err => setError(err.message ?? 'Impossible de charger les paiements'))
             .finally(() => setLoading(false));
     };
 
@@ -59,26 +57,25 @@ const ClientCustomPayments = () => {
 
     const totalDue  = payments.filter(p => p.status === 'PENDING').reduce((s, p) => s + Number(p.amount), 0);
     const totalPaid = payments.filter(p => p.status === 'PAID').reduce((s, p) => s + Number(p.amount), 0);
-    const numberLocale = language === 'ar' ? 'ar-DZ' : language === 'en' ? 'en-US' : 'fr-FR';
 
     return (
         <div className="space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <Card className="card-hover">
                     <CardContent className="p-5">
-                        <p className="text-xs text-muted-foreground uppercase">{t('clientCustomPaymentsDue')}</p>
-                        <p className="text-2xl font-bold mt-2 text-warning">{totalDue.toLocaleString(numberLocale)} DZD</p>
+                        <p className="text-xs text-muted-foreground uppercase">À payer</p>
+                        <p className="text-2xl font-bold mt-2 text-warning">{totalDue.toLocaleString('fr-FR')} DZD</p>
                     </CardContent>
                 </Card>
                 <Card className="card-hover">
                     <CardContent className="p-5">
-                        <p className="text-xs text-muted-foreground uppercase">{t('clientCustomPaymentsTotalPaid')}</p>
-                        <p className="text-2xl font-bold mt-2 text-accent">{totalPaid.toLocaleString(numberLocale)} DZD</p>
+                        <p className="text-xs text-muted-foreground uppercase">Total payé</p>
+                        <p className="text-2xl font-bold mt-2 text-accent">{totalPaid.toLocaleString('fr-FR')} DZD</p>
                     </CardContent>
                 </Card>
                 <Card className="card-hover">
                     <CardContent className="p-5">
-                        <p className="text-xs text-muted-foreground uppercase">{t('clientCustomPaymentsRequests')}</p>
+                        <p className="text-xs text-muted-foreground uppercase">Demandes</p>
                         <p className="text-2xl font-bold mt-2">{payments.length}</p>
                     </CardContent>
                 </Card>
@@ -95,26 +92,29 @@ const ClientCustomPayments = () => {
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead>{t('clientCustomPaymentsTitle')}</TableHead>
-                                <TableHead>{t('clientCustomPaymentsDescription')}</TableHead>
-                                <TableHead>{t('clientVisaPaymentsAmount')}</TableHead>
-                                <TableHead>{t('clientCustomPaymentsDate')}</TableHead>
-                                <TableHead>{t('clientVisaPaymentsStatus')}</TableHead>
-                                <TableHead className="text-right">{t('clientCustomPaymentsAction')}</TableHead>
+                                <TableHead>Titre</TableHead>
+                                <TableHead>Description</TableHead>
+                                <TableHead>Montant</TableHead>
+                                <TableHead>Date</TableHead>
+                                <TableHead>Statut</TableHead>
+                                <TableHead className="text-right">Action</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {loading && (
                                 <TableRow>
-                                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                                        {t('clientCustomPaymentsLoading')}
+                                    <TableCell colSpan={6} className="p-8">
+                                        <AppLoading
+                                            fullScreen={false}
+                                            message="Chargement de vos demandes de paiement..."
+                                        />
                                     </TableCell>
                                 </TableRow>
                             )}
                             {!loading && payments.length === 0 && (
                                 <TableRow>
                                     <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                                        {t('clientCustomPaymentsEmpty')}
+                                        Aucune demande de paiement pour le moment
                                     </TableCell>
                                 </TableRow>
                             )}
@@ -127,23 +127,23 @@ const ClientCustomPayments = () => {
                                         {p.description ?? '—'}
                                     </TableCell>
                                     <TableCell className="font-semibold">
-                                        {Number(p.amount).toLocaleString(numberLocale)} {p.currency}
+                                        {Number(p.amount).toLocaleString('fr-FR')} {p.currency}
                                     </TableCell>
                                     <TableCell className="text-sm text-muted-foreground">
-                                        {new Date(p.createdAt).toLocaleDateString(numberLocale)}
+                                        {new Date(p.createdAt).toLocaleDateString('fr-FR')}
                                     </TableCell>
                                     <TableCell>
                                         <Badge variant="outline" className={statusBadge[p.status]}>
                                             {p.status === 'PAID'    && <CheckCircle2 className="w-3 h-3 mr-1" />}
                                             {p.status === 'PENDING' && <Clock className="w-3 h-3 mr-1" />}
                                             {p.status === 'FAILED'  && <XCircle className="w-3 h-3 mr-1" />}
-                                            {t(statusLabel[p.status] ?? 'clientStatusUnknown')}
+                                            {statusLabel[p.status]}
                                         </Badge>
                                     </TableCell>
                                     <TableCell className="text-right">
                                         {p.status !== 'PAID' && (
                                             <Button size="sm" className="bg-gradient-primary text-white" onClick={() => navigate(`/client/custom-payments/${p.id}/pay`)}>
-                                                <CreditCard className="w-4 h-4 mr-1" /> {t('clientCustomPaymentsPay')}
+                                                <CreditCard className="w-4 h-4 mr-1" /> Payer
                                             </Button>
                                         )}
                                     </TableCell>

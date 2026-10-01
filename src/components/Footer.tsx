@@ -1,8 +1,5 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useLanguage } from '@/i18n/LanguageContext';
-import type { TranslationKey } from '@/i18n/translations';
-import type { LucideIcon } from 'lucide-react';
 import {
   Plane, Building2, Stamp, Wifi, Tag,
   HelpCircle, FileQuestion, Mail, Ban,
@@ -10,9 +7,6 @@ import {
   FileCheck, Lock, ScrollText,
   Facebook, Instagram, X, Youtube,
 } from 'lucide-react';
-import TermsModal from '@/components/TermsModal';
-import PrivacyModal from '@/components/PrivacyModal';
-import LegalMentionsModal from '@/components/LegalMentionsModal';
 
 const Anchor = 'a';
 
@@ -23,71 +17,54 @@ const socials = [
   { label: 'YouTube', Icon: Youtube, href: '#' },
 ];
 
-type ModalAction = 'terms-modal' | 'privacy-modal' | 'legal-modal';
-
-interface ColumnLink {
-  icon: LucideIcon;
-  label: TranslationKey;
-  to?: string;
-  action?: ModalAction;
-}
-
-interface Column {
-  title: TranslationKey;
-  color: string;
-  to?: string;
-  links: ColumnLink[];
-}
-
-const columns: Column[] = [
+const columns = [
   {
-    title: 'footerServices',
+    title: 'Services',
     color: '#F5A623',
     to: '/#services',
     links: [
-      { icon: Plane, label: 'footerFlights', to: '/flights' },
-      { icon: Building2, label: 'footerHotels', to: '/hotels' },
-      { icon: Stamp, label: 'footerVisas', to: '/visa' },
-      { icon: Wifi, label: 'footerEsim', to: '/esim' },
-      { icon: Tag, label: 'footerOffers', to: '/#offres' },
+      { icon: Plane, label: 'Vols', to: '/flights' },
+      { icon: Building2, label: 'Hotels', to: '/hotels' },
+      { icon: Stamp, label: 'Visas', to: '/visa' },
+      { icon: Wifi, label: 'eSIM', to: '/esim' },
+      { icon: Tag, label: 'Offres', to: '/#offres' },
     ],
   },
   {
-    title: 'footerSupport',
+    title: 'Assistance',
     color: '#F5A623',
     to: '/assistance',
     links: [
-      { icon: HelpCircle, label: 'footerHelpCenter', to: '/assistance' },
-      { icon: FileQuestion, label: 'footerFaq', to: '/assistance' },
-      { icon: Mail, label: 'contactUs', to: '/contact' },
-      { icon: Ban, label: 'footerCancellation', to: '/cancellation' },
+      { icon: HelpCircle, label: "Centre d'aide", to: '/assistance' },
+      { icon: FileQuestion, label: 'FAQ', to: '/assistance' },
+      { icon: Mail, label: 'Nous contacter', to: '/contact' },
+      { icon: Ban, label: 'Annulation/Remboursement', to: '/cancellation' },
     ],
   },
   {
-    title: 'aboutUs',
+    title: 'A propos',
     color: '#F5A623',
     links: [
-      { icon: Users, label: 'footerWhoWeAre', to: '/about' },
-      { icon: BookOpen, label: 'footerTravelBlog', to: '/blog' },
-      { icon: Briefcase, label: 'footerCareers', to: '/careers' },
-      { icon: Newspaper, label: 'footerPress', to: '/press' },
+      { icon: Users, label: 'Qui sommes nous ?', to: '/about' },
+      { icon: BookOpen, label: 'Blog Voyage', to: '/blog' },
+      { icon: Briefcase, label: 'Carrieres', to: '/careers' },
+      { icon: Newspaper, label: 'Presse', to: '/press' },
     ],
   },
   {
-    title: 'footerLegal',
+    title: 'Informations Legales',
     color: '#0865FE',
-    to: '/legal-info',
     links: [
-      { icon: FileCheck, label: 'termsConditions', action: 'terms-modal' },
-      { icon: Lock, label: 'privacyPolicy', action: 'privacy-modal' },
-      { icon: ScrollText, label: 'footerLegalNotice', action: 'legal-modal' },
+      { icon: FileCheck, label: 'Conditions generales', to: '/terms' },
+      { icon: Lock, label: 'Politique de confidentialite', to: '/privacy' },
+      { icon: ScrollText, label: 'Mentions legales', to: '/legal' },
     ],
   },
 ];
 
 interface SocialLinkProps {
   label: string;
-  Icon: LucideIcon;
+  Icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
   href: string;
 }
 
@@ -104,30 +81,16 @@ function SocialLink({ label, Icon, href }: SocialLinkProps) {
 }
 
 interface FooterLinkProps {
-  link: ColumnLink;
   label: string;
+  to: string;
+  Icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
   color: string;
-  onModalOpen: (action: ModalAction) => void;
 }
 
-function FooterLink({ link, label, color, onModalOpen }: FooterLinkProps) {
-  const Icon = link.icon;
-
-  if (link.action) {
-    return (
-        <button
-            onClick={() => onModalOpen(link.action!)}
-            className="flex items-start gap-2 text-sm text-gray-500 hover:text-[#0B1E5C] transition-colors text-left"
-        >
-          <Icon className="w-4 h-4 mt-0.5 shrink-0" style={{ color }} />
-          <span>{label}</span>
-        </button>
-    );
-  }
-
+function FooterLink({ label, to, Icon, color }: FooterLinkProps) {
   return (
       <Link
-          to={link.to!}
+          to={to}
           className="flex items-start gap-2 text-sm text-gray-500 hover:text-[#0B1E5C] transition-colors"
       >
         <Icon className="w-4 h-4 mt-0.5 shrink-0" style={{ color }} />
@@ -162,73 +125,63 @@ function ColumnTitle({ title, color, to }: ColumnTitleProps) {
 
 const Footer = () => {
   const { t } = useLanguage();
-  const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
-  const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
-  const [isLegalModalOpen, setIsLegalModalOpen] = useState(false);
+  const location = useLocation();
 
-  const handleModalOpen = (action: ModalAction) => {
-    if (action === 'terms-modal') setIsTermsModalOpen(true);
-    if (action === 'privacy-modal') setIsPrivacyModalOpen(true);
-    if (action === 'legal-modal') setIsLegalModalOpen(true);
-  };
+  if (location.pathname === '/hotels') {
+    return null;
+  }
 
   return (
-      <>
-        <footer className="bg-white border-t border-gray-100">
-          <div className="max-w-7xl mx-auto px-6 md:px-12 py-10 md:py-12">
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-x-8 gap-y-10">
+      <footer className="bg-white border-t border-gray-100">
+        <div className="max-w-7xl mx-auto px-6 md:px-12 py-10 md:py-12">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-x-8 gap-y-10">
 
-              {/* Brand */}
-              <div className="col-span-2 md:col-span-1">
-              <span className="font-extrabold text-3xl tracking-tight select-none">
-                <span className="text-[#0865FE]">Bookin</span>
-                <span style={{ color: '#F5A623' }}>GO</span>
-              </span>
+            {/* Brand */}
+            <div className="col-span-2 md:col-span-1">
+            <span className="font-extrabold text-3xl tracking-tight select-none">
+              <span className="text-[#0865FE]">Bookin</span>
+              <span style={{ color: '#F5A623' }}>GO</span>
+            </span>
 
-                <p className="text-gray-900 text-sm font-bold mt-3">
-                  {t('footerTagline')}
-                </p>
+              <p className="text-gray-900 text-sm font-bold mt-3">
+                Voyagez, explorez, vivez plus
+              </p>
 
-                <p className="text-sm mt-2 leading-relaxed max-w-xs text-gray-500">
-                  {t('footerDesc')}
-                </p>
-              </div>
+              <p className="text-sm mt-2 leading-relaxed max-w-xs text-gray-500">
+                {t('footerDesc') || "Votre plateforme de confiance pour l'obtention de visas electroniques."}
+              </p>
+            </div>
 
-              {/* Colonnes de liens */}
-              {columns.map((col) => (
-                  <div key={col.title}>
-                      <ColumnTitle title={t(col.title)} color={col.color} to={col.to} />
-                    <div className="space-y-3">
-                      {col.links.map((l) => (
-                        <FooterLink key={l.label} link={l} label={t(l.label)} color={col.color} onModalOpen={handleModalOpen} />
-                      ))}
-                    </div>
+            {/* Colonnes de liens */}
+            {columns.map((col) => (
+                <div key={col.title}>
+                  <ColumnTitle title={col.title} color={col.color} to={col.to} />
+                  <div className="space-y-3">
+                    {col.links.map((l) => (
+                        <FooterLink key={l.label} label={l.label} to={l.to} Icon={l.icon} color={col.color} />
+                    ))}
                   </div>
-              ))}
-            </div>
+                </div>
+            ))}
           </div>
+        </div>
 
-          {/* Divider */}
-          <div className="border-t border-gray-100" />
+        {/* Divider */}
+        <div className="border-t border-gray-100" />
 
-          {/* Bottom bar */}
-          <div className="max-w-7xl mx-auto px-6 md:px-12 py-5 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] flex flex-col sm:flex-row items-center justify-between gap-4">
-            <p className="text-sm text-gray-500">
-              © {new Date().getFullYear()} <strong className="text-gray-700">BookinGO</strong>. {t('allRightsReserved')}.
-            </p>
+        {/* Bottom bar */}
+        <div className="max-w-7xl mx-auto px-6 md:px-12 py-5 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <p className="text-sm text-gray-500">
+            © {new Date().getFullYear()} <strong className="text-gray-700">BookinGO</strong>. Tous droits reserves.
+          </p>
 
-            <div className="flex items-center gap-3">
-              {socials.map((s) => (
-                  <SocialLink key={s.label} label={s.label} Icon={s.Icon} href={s.href} />
-              ))}
-            </div>
+          <div className="flex items-center gap-3">
+            {socials.map((s) => (
+                <SocialLink key={s.label} label={s.label} Icon={s.Icon} href={s.href} />
+            ))}
           </div>
-        </footer>
-
-        <TermsModal isOpen={isTermsModalOpen} onClose={() => setIsTermsModalOpen(false)} />
-        <PrivacyModal isOpen={isPrivacyModalOpen} onClose={() => setIsPrivacyModalOpen(false)} />
-        <LegalMentionsModal isOpen={isLegalModalOpen} onClose={() => setIsLegalModalOpen(false)} />
-      </>
+        </div>
+      </footer>
   );
 };
 

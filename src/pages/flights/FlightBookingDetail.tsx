@@ -11,9 +11,18 @@ export default function FlightBookingDetail() {
 
   return (
     <div className="min-h-screen bg-[#0B0F2E]">
-      <div className="max-w-3xl mx-auto px-4 pt-24 pb-16">
-        <button onClick={() => navigate('/flights/my-bookings')} className="text-white/70 hover:text-white flex items-center gap-2 text-sm mb-6">
-          <ArrowLeft className="w-4 h-4" /> Mes réservations
+      <div
+        className="max-w-3xl mx-auto px-4 pb-16"
+        style={{
+          paddingTop: 'calc(env(safe-area-inset-top, 0px) + 6rem)',
+        }}
+      >
+        <button
+          onClick={() => window.history.length > 1 ? navigate(-1) : navigate('/flights/my-bookings')}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white/90 hover:text-white border border-white/15 text-xs font-semibold backdrop-blur-md mb-6 transition-all cursor-pointer"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
+          <span>Mes réservations</span>
         </button>
 
         {refId ? (

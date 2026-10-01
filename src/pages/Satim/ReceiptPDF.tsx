@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Loader2, Download, Printer, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getReceipt, type ReceiptData } from '@/service/payment.service';
+import AppLoading from '@/components/common/AppLoading';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const formatAmount = (v: number | string) => `${Number(v).toFixed(2)} DA`;
@@ -68,9 +69,7 @@ const ReceiptPDF = () => {
 
     // ── Loading ───────────────────────────────────────────────────────────────
     if (loading) return (
-        <div className="min-h-screen flex items-center justify-center">
-            <Loader2 className="w-8 h-8 animate-spin text-primary" />
-        </div>
+        <AppLoading message="Génération de votre reçu..." />
     );
 
     if (error || !receipt) return (

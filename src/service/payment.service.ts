@@ -74,12 +74,27 @@ export const initiateCustomSatimPayment = async (
     id: string,
     captchaToken: string,
 ): Promise<SatimInitiateResult> => {
+    if (!id) {
+        throw new Error("Identifiant du paiement introuvable.");
+    }
     const res = await fetch(`${API_URL}/api/payments/custom/${id}/initiate`, {
         method: 'POST', headers: authHeaders(),
         body: JSON.stringify({ captchaToken }),
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.message ?? "Échec de l'initiation du paiement SATIM");
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        const msg = (typeof data?.message === 'string' && data.message !== 'null' && data.message.trim())
+            ? data.message
+            : (typeof data?.error === 'string' && data.error !== 'null' && data.error.trim())
+            ? data.error
+            : (typeof data?.errorMessage === 'string' && data.errorMessage !== 'null' && data.errorMessage.trim())
+            ? data.errorMessage
+            : "Échec de l'initiation du paiement SATIM";
+        throw new Error(msg);
+    }
+    if (!data?.formUrl) {
+        throw new Error("Lien de redirection bancaire SATIM indisponible");
+    }
     return data;
 };
 
@@ -147,12 +162,32 @@ export const initiateSatimPayment = async (
     applicationId: string,
     captchaToken: string,
 ): Promise<SatimInitiateResult> => {
+    if (!applicationId) {
+        throw new Error("Identifiant de la demande introuvable.");
+    }
     const res = await fetch(`${API_URL}/api/payments/satim/initiate`, {
         method: 'POST', headers: authHeaders(),
         body: JSON.stringify({ applicationId, captchaToken }),
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.message ?? "Échec de l'initiation du paiement SATIM");
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        const msg = (typeof data?.message === 'string' && data.message !== 'null' && data.message.trim())
+            ? data.message
+            : (typeof data?.error === 'string' && data.error !== 'null' && data.error.trim())
+            ? data.error
+            : (typeof data?.errorMessage === 'string' && data.errorMessage !== 'null' && data.errorMessage.trim())
+            ? data.errorMessage
+            : "Échec de l'initiation du paiement SATIM";
+        throw new Error(msg);
+    }
+    if (!data?.formUrl) {
+        const msg = (typeof data?.message === 'string' && data.message !== 'null' && data.message.trim())
+            ? data.message
+            : (typeof data?.error === 'string' && data.error !== 'null' && data.error.trim())
+            ? data.error
+            : "Lien de redirection bancaire SATIM indisponible";
+        throw new Error(msg);
+    }
     return data;
 };
 
@@ -160,12 +195,32 @@ export const initiateFlightSatimPayment = async (
     flightBookingId: string,
     captchaToken: string,
 ): Promise<SatimInitiateResult> => {
+    if (!flightBookingId) {
+        throw new Error("Identifiant de réservation introuvable.");
+    }
     const res = await fetch(`${API_URL}/api/payments/satim/initiate-flight`, {
         method: 'POST', headers: authHeaders(),
         body: JSON.stringify({ flightBookingId, captchaToken }),
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error ?? data.message ?? "Échec de l'initiation du paiement SATIM");
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        const msg = (typeof data?.error === 'string' && data.error !== 'null' && data.error.trim())
+            ? data.error
+            : (typeof data?.message === 'string' && data.message !== 'null' && data.message.trim())
+            ? data.message
+            : (typeof data?.errorMessage === 'string' && data.errorMessage !== 'null' && data.errorMessage.trim())
+            ? data.errorMessage
+            : "Échec de l'initiation du paiement SATIM";
+        throw new Error(msg);
+    }
+    if (!data?.formUrl) {
+        const msg = (typeof data?.error === 'string' && data.error !== 'null' && data.error.trim())
+            ? data.error
+            : (typeof data?.message === 'string' && data.message !== 'null' && data.message.trim())
+            ? data.message
+            : "Lien de redirection bancaire SATIM indisponible";
+        throw new Error(msg);
+    }
     return data;
 };
 

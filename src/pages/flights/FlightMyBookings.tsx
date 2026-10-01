@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plane, Calendar, Search, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import AppLoading from '@/components/common/AppLoading';
 import BookingCard from '@/components/flights/BookingCard';
 import BookingDetailDrawer from '@/components/flights/BookingDetailDrawer';
 import { searchBookings, BookingListItem } from '@/service/flights/searchBookings.service';
@@ -46,15 +47,21 @@ export default function FlightMyBookings() {
   const revenue   = items.reduce((s, b) => s + (Number(b.totalAmount) || 0), 0);
 
   return (
-      <div className="min-h-screen bg-slate-50">
+      <div className="min-h-screen bg-gradient-to-b from-[#DFECFF] via-[#F0F6FF] to-[#DFECFF]">
         {/* Header */}
-        <div className="bg-white border-b border-slate-200">
-          <div className="max-w-5xl mx-auto px-4 pt-20 pb-6">
+        <div className="bg-transparent border-b border-slate-200/60">
+          <div
+            className="max-w-5xl mx-auto px-4 pb-6"
+            style={{
+              paddingTop: 'calc(env(safe-area-inset-top, 0px) + 5rem)',
+            }}
+          >
             <button
-                onClick={() => navigate('/flights')}
-                className="text-slate-400 hover:text-[#0B0F2E] flex items-center gap-2 text-sm mb-4 transition-colors"
+                onClick={() => window.history.length > 1 ? navigate(-1) : navigate('/flights')}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-slate-200 text-slate-700 hover:text-[#0865FE] hover:border-[#0865FE]/30 font-semibold text-xs shadow-xs hover:shadow-sm transition-all mb-4 cursor-pointer"
             >
-              <ArrowLeft className="w-4 h-4" /> Retour
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Retour</span>
             </button>
             <div className="flex items-center justify-between">
               <div>
@@ -158,7 +165,13 @@ export default function FlightMyBookings() {
           {/* Results */}
           <div className="space-y-3">
             {loading ? (
-                [...Array(3)].map((_, i) => <Skeleton key={i} className="h-32 rounded-2xl bg-slate-200" />)
+                <div className="py-12 bg-white rounded-2xl border border-slate-200">
+                  <AppLoading
+                    fullScreen={false}
+                    message="Recherche de vos réservations de vols..."
+                    subMessage="Interrogation des réservations en cours..."
+                  />
+                </div>
             ) : items.length === 0 ? (
                 <div className="text-center py-16 rounded-2xl bg-white border border-slate-200">
                   <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">

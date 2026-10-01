@@ -96,7 +96,7 @@ export const searchLocations = async (
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.message ?? 'Impossible de récupérer les destinations');
-    return data.data;
+    return data?.data || data || { countries: [], regions: [] };
 };
 
 /** 2. POST /api/esim/packages */
@@ -156,8 +156,13 @@ export const getEsimPaymentStatus = async (
 };
 
 export const formatBytes = (bytes: number): string => {
-    if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(0)} GB`;
-    return `${(bytes / 1048576).toFixed(0)} MB`;
+    if (!bytes || bytes <= 0) return '0 MB';
+    if (bytes >= 1073741824) {
+        const gb = bytes / 1073741824;
+        return Number.isInteger(gb) ? `${gb} GB` : `${parseFloat(gb.toFixed(1))} GB`;
+    }
+    const mb = bytes / 1048576;
+    return Number.isInteger(mb) ? `${mb} MB` : `${parseFloat(mb.toFixed(1))} MB`;
 };
 
 export const getDiscountedPrice = (pkg: EsimPackage, days: number): number => {

@@ -1,41 +1,50 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
+import AppLoading from '@/components/common/AppLoading';
 
 const RouteTopLoader = () => {
     const { pathname } = useLocation();
-    const [width, setWidth]   = useState(0);
-    const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+    const [visible, setVisible] = useState(false);
+    const [fading, setFading] = useState(false);
+    const prevPathname = useRef<string>(pathname);
+    const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const fadeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
-        // new route → flash the bar
-        setWidth(0);
-        setTimeout(() => setWidth(40), 10);
-        setTimeout(() => setWidth(70), 80);
-        const done = setTimeout(() => {
-            setWidth(100);
-            setTimeout(() => setWidth(0), 300);
-        }, 200);
+        if (prevPathname.current !== pathname) {
+            prevPathname.current = pathname;
+            setVisible(true);
+            setFading(false);
+
+            if (timeoutRef.current) clearTimeout(timeoutRef.current);
+            if (fadeTimeoutRef.current) clearTimeout(fadeTimeoutRef.current);
+
+            // Display briefly (300ms) then smooth fade out (160ms)
+            fadeTimeoutRef.current = setTimeout(() => {
+                setFading(true);
+                timeoutRef.current = setTimeout(() => {
+                    setVisible(false);
+                    setFading(false);
+                }, 160);
+            }, 300);
+        }
+
         return () => {
-            clearTimeout(done);
-            if (timer.current) clearInterval(timer.current);
+            if (timeoutRef.current) clearTimeout(timeoutRef.current);
+            if (fadeTimeoutRef.current) clearTimeout(fadeTimeoutRef.current);
         };
     }, [pathname]);
 
-    if (width === 0) return null;
+    if (!visible) return null;
+
     return (
-        <div style={{
-            position:     'fixed',
-            top:          0,
-            left:         0,
-            height:       3,
-            width:        `${width}%`,
-            background:   '#29d',
-            zIndex:       9999,
-            transition:   width === 100 ? 'width .15s ease, opacity .3s .1s ease' : 'width .2s ease',
-            opacity:      width === 100 ? 0 : 1,
-            borderRadius: '0 2px 2px 0',
-            boxShadow:    '0 0 8px rgba(34,153,221,.6)',
-        }} />
+        <div
+            className={`fixed inset-0 z-[99999] pointer-events-none transition-opacity duration-160 ease-out select-none ${
+                fading ? 'opacity-0' : 'opacity-100'
+            }`}
+        >
+            <AppLoading message="Chargement..." fullScreen={false} className="h-full w-full bg-white/40 dark:bg-[#0B0F2E]/60 backdrop-blur-md" />
+        </div>
     );
 };
 

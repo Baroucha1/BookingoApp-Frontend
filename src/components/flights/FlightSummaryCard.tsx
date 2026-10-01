@@ -24,17 +24,19 @@ function InfoPill({ icon: Icon, label }: { icon: React.ComponentType<{ className
   );
 }
 
-function SegmentRow({ s }: { s: NormalizedSegment }) {
+function SegmentRow({ s }: { s?: NormalizedSegment }) {
+  if (!s) return null;
   return (
       <div className="flex items-center gap-2 text-xs text-slate-500">
         <span className="w-4 h-4 rounded-full bg-red-500 inline-flex items-center justify-center text-white text-[9px] font-bold shrink-0">✈</span>
         <span className="font-medium text-slate-600">{s.carrierCode}{s.flightNumber}</span>
-        <span>{s.departure.airport} → {s.arrival.airport}</span>
+        <span>{s.departure?.airport ?? ''} → {s.arrival?.airport ?? ''}</span>
       </div>
   );
 }
 
-function LegBlock({ label, leg }: { label: string; leg: DisplayOffer['legs'][number] }) {
+function LegBlock({ label, leg }: { label: string; leg?: DisplayOffer['legs'][number] }) {
+  if (!leg) return null;
   return (
       <div className="space-y-3">
         <div className="flex items-center gap-2">
@@ -62,9 +64,11 @@ function LegBlock({ label, leg }: { label: string; leg: DisplayOffer['legs'][num
           </div>
         </div>
 
-        <div className="space-y-1 pt-1">
-          {leg.segments.map((s, i) => <SegmentRow key={s.paxSegmentRefId ?? i} s={s} />)}
-        </div>
+        {leg.segments && leg.segments.length > 0 && (
+          <div className="space-y-1 pt-1">
+            {leg.segments.map((s, i) => <SegmentRow key={s?.paxSegmentRefId ?? i} s={s} />)}
+          </div>
+        )}
 
         {leg.checkedBaggage && (
             <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-medium">
@@ -84,9 +88,24 @@ export default function FlightSummaryCard({ offer, passengers }: Props) {
     );
   }
 
-  const outbound = offer.legs[0];
-  const inbound = offer.legs[1];
-  const changeFee = offer.raw.changeFee;
+  const outbound = offer.legs?.[0];
+  const inbound = offer.legs?.[1];
+  const changeFee = offer.raw?.changeFee;
+
+  const fallbackLeg: DisplayOffer['legs'][number] = {
+    originDestId: 'outbound',
+    originAirport: offer.originAirport,
+    destinationAirport: offer.destinationAirport,
+    departureTime: offer.departureTime,
+    departureDate: offer.departureDate,
+    arrivalTime: offer.arrivalTime,
+    arrivalDate: offer.arrivalDate,
+    durationLabel: offer.totalDurationLabel,
+    isDirect: offer.isDirect,
+    stopsLabel: offer.stopsLabel,
+    checkedBaggage: offer.checkedBaggage,
+    segments: offer.raw?.segments ?? [],
+  };
 
   return (
       <div className="p-5 rounded-2xl bg-[#DFECFF] shadow-sm space-y-4">
@@ -107,7 +126,7 @@ export default function FlightSummaryCard({ offer, passengers }: Props) {
           </div>
         </div>
 
-        <LegBlock label="ALLER" leg={outbound} />
+        <LegBlock label="ALLER" leg={outbound || fallbackLeg} />
 
         {inbound && (
             <div className="pt-3 border-t border-blue-200/60">

@@ -471,11 +471,11 @@ const FlightBookingsAdmin = () => {
                                     <div><span className="text-muted-foreground">Compagnie:</span> {selected.airlineName ?? selected.airlineCode ?? '—'}</div>
                                     <div>
                                         <span className="text-muted-foreground">Départ:</span>{' '}
-                                        {selected.departureDate ? new Date(selected.departureDate).toLocaleString('fr-FR') : '—'}
+                                        {selected.departureDate ? new Date(selected.departureDate).toLocaleString('fr-FR', { hour12: false }) : '—'}
                                     </div>
                                     <div><span className="text-muted-foreground">Classe:</span> {selected.cabinClass ?? '—'}</div>
                                     <div><span className="text-muted-foreground">Bagages:</span> {selected.baggage ?? '—'}</div>
-                                    <div><span className="text-muted-foreground">Réservé le:</span> {new Date(selected.createdAt).toLocaleString('fr-FR')}</div>
+                                    <div><span className="text-muted-foreground">Réservé le:</span> {new Date(selected.createdAt).toLocaleString('fr-FR', { hour12: false })}</div>
                                     <div className="col-span-2">
                                         <span className="text-muted-foreground">Fare Source:</span>{' '}
                                         <span className="font-mono text-xs break-all">{selected.fareSourceCode}</span>
@@ -542,7 +542,7 @@ const FlightBookingsAdmin = () => {
                                                             <div key={i} className="rounded border p-2 flex items-center justify-between text-xs">
                                                                 <span className="font-mono">{seg.carrierCode}{seg.flightNumber}</span>
                                                                 <span>{seg.departure.iataCode} → {seg.arrival.iataCode}</span>
-                                                                <span>{new Date(seg.departure.at).toLocaleString('fr-FR')}</span>
+                                                                <span>{new Date(seg.departure.at).toLocaleString('fr-FR', { hour12: false })}</span>
                                                                 <Badge variant="outline" className="text-[10px]">{seg.bookingStatus}</Badge>
                                                             </div>
                                                         ))}
@@ -600,7 +600,7 @@ const FlightBookingsAdmin = () => {
                                             <div><span className="text-muted-foreground">Montant:</span> <strong>{Number(selected.payment.amount).toLocaleString('fr-FR')} {selected.payment.currency}</strong></div>
                                             <div>
                                                 <span className="text-muted-foreground">Payé le:</span>{' '}
-                                                {selected.payment.paidAt ? new Date(selected.payment.paidAt).toLocaleString('fr-FR') : '—'}
+                                                {selected.payment.paidAt ? new Date(selected.payment.paidAt).toLocaleString('fr-FR', { hour12: false }) : '—'}
                                             </div>
                                         </div>
 
@@ -665,7 +665,7 @@ const FlightBookingsAdmin = () => {
                                                     </p>
                                                     <p className={`text-xs mt-0.5 ${selected.status === 'TICKETED' ? 'text-blue-700' : 'text-green-700'}`}>
                                                         {selected.status === 'TICKETED'
-                                                            ? `Émis le ${selected.ticketedAt ? new Date(selected.ticketedAt).toLocaleString('fr-FR') : '—'}`
+                                                            ? `Émis le ${selected.ticketedAt ? new Date(selected.ticketedAt).toLocaleString('fr-FR', { hour12: false }) : '—'}`
                                                             : 'Le billet peut maintenant être émis via Worldsoft.'}
                                                     </p>
                                                     {selected.ticketNumbers?.length > 0 && (

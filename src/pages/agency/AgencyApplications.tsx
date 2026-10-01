@@ -203,7 +203,7 @@ const AgencyApplications = () => {
                           </div>
                           <div className="flex-1 pb-3">
                             <div className="text-sm font-medium">{APP_STATUS_LABEL[t.status]}</div>
-                            <div className="text-xs text-muted-foreground">{new Date(t.date).toLocaleString('fr-FR')}</div>
+                            <div className="text-xs text-muted-foreground">{new Date(t.date).toLocaleString('fr-FR', { hour12: false })}</div>
                             {t.note && <div className="text-xs mt-1">{t.note}</div>}
                           </div>
                         </div>

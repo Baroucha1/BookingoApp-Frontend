@@ -1,5 +1,4 @@
 import {EntryType, VisaCategory} from "@/lib/enums.ts";
-import type { Image } from '@/lib/types';
 
 const BASE = import.meta.env.VITE_API_URL;
 
@@ -28,7 +27,6 @@ export interface CountryOption {
     nameFr: string;
     nameEn: string;
     nameAr: string;
-    images?: Image[];
 }
 
 export interface DocumentType {

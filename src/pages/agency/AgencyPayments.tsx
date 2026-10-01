@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 
 const fmtMoney = (a: number, c: string) =>
   new Intl.NumberFormat('fr-FR', { style: 'currency', currency: c, maximumFractionDigits: 0 }).format(a);
-const fmtDateTime = (s: string) => new Date(s).toLocaleString('fr-FR');
+const fmtDateTime = (s: string) => new Date(s).toLocaleString('fr-FR', { hour12: false });
 
 const STATUS_COLOR: Record<string, string> = {
   paid: 'bg-accent text-accent-foreground border-0',

@@ -8,8 +8,7 @@ import { Wifi, Copy, CheckCircle2, Clock, XCircle, Plus } from 'lucide-react';
 import { useAuth }              from '@/hooks/useAuth';
 import { useToast }             from '@/hooks/use-toast';
 import { QRCodeSVG }            from 'qrcode.react';
-import { useLanguage }          from '@/i18n/LanguageContext';
-import type { TranslationKey } from '@/i18n/translations';
+import AppLoading               from '@/components/common/AppLoading';
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -44,16 +43,10 @@ const STATUS_COLOR: Record<string, string> = {
     FAILED:  'bg-red-100    text-red-800    border-red-300',
 };
 
-const STATUS_LABEL: Record<string, TranslationKey> = {
-    PENDING: 'clientEsimStatusPending',
-    SUCCESS: 'clientEsimStatusSuccess',
-    FAILED:  'clientEsimStatusFailed',
-};
-
-const DELIVERY_METHOD_LABEL: Record<EsimOrder['deliveryMethod'], TranslationKey> = {
-    EMAIL: 'clientEsimMethodEmail',
-    WHATSAPP: 'clientEsimMethodWhatsapp',
-    SMS: 'clientEsimMethodSms',
+const STATUS_LABEL: Record<string, string> = {
+    PENDING: 'En attente',
+    SUCCESS: 'Activée',
+    FAILED:  'Échouée',
 };
 
 const STATUS_ICON: Record<string, JSX.Element> = {
@@ -64,7 +57,6 @@ const STATUS_ICON: Record<string, JSX.Element> = {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 const ClientEsim = () => {
-    const { t, language } = useLanguage();
     const { user }                      = useAuth();
     const { toast }                     = useToast();
     const navigate                      = useNavigate();
@@ -72,7 +64,6 @@ const ClientEsim = () => {
     const [loading,  setLoading]        = useState(true);
     const [error,    setError]          = useState<string | null>(null);
     const [selected, setSelected]       = useState<EsimOrder | null>(null);
-    const dateLocale = language === 'ar' ? 'ar-DZ' : language === 'en' ? 'en-US' : 'fr-FR';
 
     // ── Fetch orders ──────────────────────────────────────────────────────────
     useEffect(() => {
@@ -88,9 +79,9 @@ const ClientEsim = () => {
     }, [user]);
 
     // ── Copy to clipboard ─────────────────────────────────────────────────────
-    const copy = (text: string, labelKey: TranslationKey) => {
+    const copy = (text: string, label: string) => {
         navigator.clipboard.writeText(text);
-        toast({ title: `${t(labelKey)} ${t('clientEsimCopied')}` });
+        toast({ title: `${label} copié !` });
     };
 
     return (
@@ -99,7 +90,7 @@ const ClientEsim = () => {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <p className="text-sm text-muted-foreground">
-                    {t('clientEsimOrdersIntro')}
+                    Retrouvez toutes vos eSIM de voyage et leurs codes d'activation.
                 </p>
                 <Button
                     onClick={() => navigate('/esim')}
@@ -107,7 +98,7 @@ const ClientEsim = () => {
                     style={{ background: 'linear-gradient(135deg, #0865FE, #3B2F7E)' }}
                 >
                     <Plus className="w-4 h-4 mr-2" />
-                    {t('clientEsimBuy')}
+                    Acheter une eSIM
                 </Button>
             </div>
 
@@ -118,10 +109,12 @@ const ClientEsim = () => {
 
             {/* Loading */}
             {loading && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {[1, 2, 3].map(i => (
-                        <div key={i} className="h-48 rounded-2xl bg-muted animate-pulse" />
-                    ))}
+                <div className="bg-white rounded-2xl border border-gray-100 p-8">
+                    <AppLoading
+                        fullScreen={false}
+                        message="Chargement de vos eSIMs..."
+                        subMessage="Récupération de vos profils de connexion..."
+                    />
                 </div>
             )}
 
@@ -133,9 +126,9 @@ const ClientEsim = () => {
                             <Wifi className="w-8 h-8 text-primary" />
                         </div>
                         <div className="text-center">
-                            <p className="font-semibold text-gray-900">{t('clientEsimEmptyTitle')}</p>
+                            <p className="font-semibold text-gray-900">Aucune eSIM pour l'instant</p>
                             <p className="text-sm text-muted-foreground mt-1">
-                                {t('clientEsimEmptyDescription')}
+                                Achetez votre première eSIM de voyage et restez connecté partout.
                             </p>
                         </div>
                         <Button
@@ -144,7 +137,7 @@ const ClientEsim = () => {
                             style={{ background: 'linear-gradient(135deg, #0865FE, #3B2F7E)' }}
                         >
                             <Wifi className="w-4 h-4 mr-2" />
-                            {t('clientEsimDiscoverPlans')}
+                            Découvrir les forfaits
                         </Button>
                     </CardContent>
                 </Card>
@@ -169,14 +162,14 @@ const ClientEsim = () => {
                                         <div>
                                             <p className="font-semibold text-gray-900">{order.locationName}</p>
                                             <p className="text-xs text-muted-foreground">
-                                                {new Date(order.createdAt).toLocaleDateString(dateLocale)}
+                                                {new Date(order.createdAt).toLocaleDateString('fr-FR')}
                                             </p>
                                         </div>
                                     </div>
                                     <Badge variant="outline" className={STATUS_COLOR[order.status]}>
                                         <span className="flex items-center gap-1">
                                             {STATUS_ICON[order.status]}
-                                            {t(STATUS_LABEL[order.status])}
+                                            {STATUS_LABEL[order.status]}
                                         </span>
                                     </Badge>
                                 </div>
@@ -184,17 +177,17 @@ const ClientEsim = () => {
                                 {/* Details */}
                                 <div className="grid grid-cols-3 gap-2 pt-3 border-t border-border text-center">
                                     <div>
-                                        <p className="text-xs text-muted-foreground">{t('clientEsimVolume')}</p>
+                                        <p className="text-xs text-muted-foreground">Volume</p>
                                         <p className="font-semibold text-sm">{formatBytes(order.volumeBytes)}</p>
                                     </div>
                                     <div className="border-x border-border">
-                                        <p className="text-xs text-muted-foreground">{t('clientEsimDuration')}</p>
-                                        <p className="font-semibold text-sm">{order.durationDays} {t('clientEsimDays')}</p>
+                                        <p className="text-xs text-muted-foreground">Durée</p>
+                                        <p className="font-semibold text-sm">{order.durationDays}j</p>
                                     </div>
                                     <div>
-                                        <p className="text-xs text-muted-foreground">{t('clientEsimPrice')}</p>
+                                        <p className="text-xs text-muted-foreground">Prix</p>
                                         <p className="font-semibold text-sm text-primary">
-                                            {Number(order.amount).toLocaleString(dateLocale)} {order.currency}
+                                            {Number(order.amount).toLocaleString()} {order.currency}
                                         </p>
                                     </div>
                                 </div>
@@ -202,7 +195,7 @@ const ClientEsim = () => {
                                 {/* ICCID preview */}
                                 {order.iccid && (
                                     <div className="mt-3 bg-muted/40 rounded-lg px-3 py-2">
-                                        <p className="text-xs text-muted-foreground">{t('clientEsimIccid')}</p>
+                                        <p className="text-xs text-muted-foreground">ICCID</p>
                                         <p className="text-xs font-mono truncate">{order.iccid}</p>
                                     </div>
                                 )}
@@ -224,7 +217,7 @@ const ClientEsim = () => {
                                     </div>
                                     {selected.locationName}
                                     <Badge variant="outline" className={STATUS_COLOR[selected.status]}>
-                                        {t(STATUS_LABEL[selected.status])}
+                                        {STATUS_LABEL[selected.status]}
                                     </Badge>
                                 </DialogTitle>
                             </DialogHeader>
@@ -233,17 +226,17 @@ const ClientEsim = () => {
                                 {/* Forfait */}
                                 <div className="grid grid-cols-3 gap-3 text-center border rounded-xl p-4 bg-muted/30">
                                     <div>
-                                        <p className="text-xs text-muted-foreground">{t('clientEsimVolume')}</p>
+                                        <p className="text-xs text-muted-foreground">Volume</p>
                                         <p className="font-bold">{formatBytes(selected.volumeBytes)}</p>
                                     </div>
                                     <div className="border-x border-border">
-                                        <p className="text-xs text-muted-foreground">{t('clientEsimDuration')}</p>
-                                        <p className="font-bold">{selected.durationDays} {t('clientEsimDays')}</p>
+                                        <p className="text-xs text-muted-foreground">Durée</p>
+                                        <p className="font-bold">{selected.durationDays} jours</p>
                                     </div>
                                     <div>
-                                        <p className="text-xs text-muted-foreground">{t('clientEsimPrice')}</p>
+                                        <p className="text-xs text-muted-foreground">Prix</p>
                                         <p className="font-bold text-primary">
-                                            {Number(selected.amount).toLocaleString(dateLocale)} {selected.currency}
+                                            {Number(selected.amount).toLocaleString()} {selected.currency}
                                         </p>
                                     </div>
                                 </div>
@@ -253,7 +246,7 @@ const ClientEsim = () => {
                                     <div className="flex flex-col items-center gap-3 border rounded-xl p-5 bg-white">
                                         <QRCodeSVG value={selected.activationCode} size={160} />
                                         <p className="text-xs text-muted-foreground text-center">
-                                            {t('clientEsimQrInstructions')}
+                                            Scannez ce QR code pour activer votre eSIM
                                         </p>
                                     </div>
                                 )}
@@ -262,10 +255,9 @@ const ClientEsim = () => {
                                 {selected.iccid && (
                                     <div className="bg-muted/40 rounded-xl p-4">
                                         <div className="flex items-center justify-between mb-1">
-                                            <p className="text-xs font-medium text-muted-foreground">{t('clientEsimIccid')}</p>
+                                            <p className="text-xs font-medium text-muted-foreground">ICCID</p>
                                             <button
-                                                onClick={() => copy(selected.iccid!, 'clientEsimIccid')}
-                                                aria-label={`${t('clientEsimCopy')} ${t('clientEsimIccid')}`}
+                                                onClick={() => copy(selected.iccid!, 'ICCID')}
                                                 className="text-muted-foreground hover:text-primary transition-colors"
                                             >
                                                 <Copy className="w-3.5 h-3.5" />
@@ -279,10 +271,9 @@ const ClientEsim = () => {
                                 {selected.activationCode && (
                                     <div className="bg-muted/40 rounded-xl p-4">
                                         <div className="flex items-center justify-between mb-1">
-                                            <p className="text-xs font-medium text-muted-foreground">{t('clientEsimActivationCode')}</p>
+                                            <p className="text-xs font-medium text-muted-foreground">Code d'activation</p>
                                             <button
-                                                onClick={() => copy(selected.activationCode!, 'clientEsimActivationCode')}
-                                                aria-label={`${t('clientEsimCopy')} ${t('clientEsimActivationCode')}`}
+                                                onClick={() => copy(selected.activationCode!, "Code d'activation")}
                                                 className="text-muted-foreground hover:text-primary transition-colors"
                                             >
                                                 <Copy className="w-3.5 h-3.5" />
@@ -294,23 +285,23 @@ const ClientEsim = () => {
 
                                 {/* Infos commande */}
                                 <div className="border rounded-xl p-4 space-y-2 text-sm">
-                                    <p className="font-semibold">{t('clientEsimOrderDetails')}</p>
+                                    <p className="font-semibold">Détails de la commande</p>
                                     <div className="grid grid-cols-2 gap-2 text-xs">
                                         <div>
-                                            <span className="text-muted-foreground">{t('clientEsimName')}</span>{' '}
+                                            <span className="text-muted-foreground">Nom :</span>{' '}
                                             <strong>{selected.customerName}</strong>
                                         </div>
                                         <div>
-                                            <span className="text-muted-foreground">{t('clientEsimEmail')}</span>{' '}
+                                            <span className="text-muted-foreground">Email :</span>{' '}
                                             <strong>{selected.customerEmail}</strong>
                                         </div>
                                         <div>
-                                            <span className="text-muted-foreground">{t('clientEsimDelivery')}</span>{' '}
-                                            <strong>{t(DELIVERY_METHOD_LABEL[selected.deliveryMethod])}</strong>
+                                            <span className="text-muted-foreground">Livraison :</span>{' '}
+                                            <strong>{selected.deliveryMethod}</strong>
                                         </div>
                                         <div>
-                                            <span className="text-muted-foreground">{t('clientEsimDate')}</span>{' '}
-                                            <strong>{new Date(selected.createdAt).toLocaleDateString(dateLocale)}</strong>
+                                            <span className="text-muted-foreground">Date :</span>{' '}
+                                            <strong>{new Date(selected.createdAt).toLocaleDateString('fr-FR')}</strong>
                                         </div>
                                     </div>
                                 </div>
@@ -320,13 +311,13 @@ const ClientEsim = () => {
                                     <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
                                         <p className="text-sm font-semibold text-blue-900 mb-2 flex items-center gap-2">
                                             <Wifi className="w-4 h-4" />
-                                            {t('clientEsimActivationTitle')}
+                                            Comment activer votre eSIM
                                         </p>
                                         <ol className="text-xs text-blue-800 space-y-1 list-decimal list-inside">
-                                            <li>{t('clientEsimInstallSettings')}</li>
-                                            <li>{t('clientEsimScanQr')}</li>
-                                            <li>{t('clientEsimEnterCode')}</li>
-                                            <li>{t('clientEsimEnableAtDestination')}</li>
+                                            <li>Allez dans Réglages → Données mobiles → Ajouter un forfait</li>
+                                            <li>Scannez le QR code ci-dessus</li>
+                                            <li>Ou entrez le code d'activation manuellement</li>
+                                            <li>Activez l'eSIM à destination</li>
                                         </ol>
                                     </div>
                                 )}
@@ -335,10 +326,10 @@ const ClientEsim = () => {
                                 <Button
                                     onClick={() => { setSelected(null); navigate('/esim'); }}
                                     variant="outline"
-                                    className="w-full"
+                                    className="w-full mb-3"
                                 >
                                     <Plus className="w-4 h-4 mr-2" />
-                                    {t('clientEsimBuyAnother')}
+                                    Acheter une autre eSIM
                                 </Button>
                             </div>
                         </>

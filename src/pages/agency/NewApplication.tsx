@@ -139,6 +139,18 @@ const NewApplication = () => {
 
   return (
     <div className="max-w-5xl mx-auto space-y-4">
+      {/* Top Back Button */}
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => navigate('/agency/applications')}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-gray-200 text-gray-700 hover:text-[#0865FE] hover:border-[#0865FE]/30 font-semibold text-xs shadow-xs hover:shadow-sm transition-all cursor-pointer"
+        >
+          <ChevronLeft className="w-3.5 h-3.5" />
+          <span>Retour aux demandes</span>
+        </button>
+      </div>
+
       {/* Stepper */}
       <Card className="animate-fade-in-up">
         <CardContent className="p-4">
@@ -388,9 +400,17 @@ const NewApplication = () => {
 
       {/* Nav */}
       <div className="flex justify-between gap-2">
-        <Button variant="outline" onClick={() => setStep(s => Math.max(1, s - 1))} disabled={step === 1}>
-          <ChevronLeft className="w-4 h-4 me-1" />Précédent
-        </Button>
+        {step > 1 ? (
+          <Button
+            variant="outline"
+            onClick={() => setStep(s => Math.max(1, s - 1))}
+          >
+            <ChevronLeft className="w-4 h-4 me-1" />
+            Précédent
+          </Button>
+        ) : (
+          <div />
+        )}
         {step < 7 ? (
           <Button onClick={() => setStep(s => s + 1)} disabled={!canNext()} className="bg-gradient-primary text-primary-foreground">
             Suivant<ChevronRight className="w-4 h-4 ms-1" />

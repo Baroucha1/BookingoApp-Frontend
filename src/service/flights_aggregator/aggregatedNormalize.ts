@@ -70,7 +70,12 @@ export interface GroupedOffer {
 }
 
 function fmtTime(iso: string) {
-    return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    if (!iso) return '--:--';
+    const match = /T(\d{2}:\d{2})/.exec(iso);
+    if (match) return match[1];
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', hour12: false });
 }
 
 function fmtDate(iso: string) {

@@ -578,19 +578,27 @@ export interface CountryGroup {
   visaTypes: { price: number; currency: string }[];
 }
 
-const getCountryPhoto = (images: CountryGroup['images']): string | null => {
-  const usableImages = images.filter((image) => image.url.trim());
-  const galleryImages = usableImages.filter((image) => image.imageType === 'GALLERY');
-  const heroImages = usableImages.filter((image) => image.imageType === 'HERO');
-
-  return (
-      galleryImages.find((image) => image.isMain)?.url.trim() ??
-      galleryImages[0]?.url.trim() ??
-      heroImages.find((image) => image.isMain)?.url.trim() ??
-      heroImages[0]?.url.trim() ??
-      null
-  );
+const countryPhotos: Record<string, string> = {
+  tr: 'https://images.unsplash.com/photo-1524231757912-21f4fe3a7200?w=900&q=80',
+  eg: 'https://images.unsplash.com/photo-1503177119275-0aa32b3a9368?w=900&q=80',
+  jo: 'https://images.unsplash.com/photo-1518684079-3c830dcef090?w=900&q=80',
+  az: 'https://images.unsplash.com/photo-1596386461350-326ccb383e9f?w=900&q=80',
+  vn: 'https://images.unsplash.com/photo-1528127269322-539801943592?w=900&q=80',
+  id: 'https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=900&q=80',
+  th: 'https://images.unsplash.com/photo-1508009603885-50cf7c579365?w=900&q=80',
+  ae: 'https://images.unsplash.com/photo-1512453979798-5ea266f8880c?w=900&q=80',
+  ma: 'https://images.unsplash.com/photo-1553244297-c7c4f2bb5fb1?w=900&q=80',
+  sa: 'https://images.unsplash.com/photo-1586724237569-f3d0c1dee8c6?w=900&q=80',
+  my: 'https://images.unsplash.com/photo-1596422846543-75c6fc197f07?w=900&q=80',
+  sg: 'https://images.unsplash.com/photo-1525625293386-3f8f99389edd?w=900&q=80',
+  in: 'https://images.unsplash.com/photo-1564507592333-c60657eea523?w=900&q=80',
+  qa: 'https://images.unsplash.com/photo-1563299796-17596ed6b017?w=900&q=80',
+  ke: 'https://images.unsplash.com/photo-1547471080-7cc2caa01a7e?w=900&q=80',
+  tn: 'https://images.unsplash.com/photo-1605216663980-b7ca6e9f2451?w=900&q=80',
+  om: 'https://images.unsplash.com/photo-1578895101408-1a36b834405b?w=900&q=80',
+  am: 'https://images.unsplash.com/photo-1602343168117-bb8ffe3e2e9f?w=900&q=80',
 };
+const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=900&q=80';
 
 const FEATURED_ORDER = ['tr', 'eg', 'th', 'jo', 'id', 'qa', 'az', 'am'];
 
@@ -693,15 +701,48 @@ const Visa = () => {
       language === 'ar' ? g.nameAr : language === 'fr' ? g.nameFr : g.nameEn;
   const goApply = (g: CountryGroup) => navigate(`/apply?country=${g.code}`);
 
+  const renderHeadline = () => {
+    if (language === 'fr') return (
+        <h1 className="font-extrabold leading-[1.1] text-[#002161]" style={{ fontSize: 'clamp(36px,5vw,64px)', letterSpacing: '-1px' ,fontFamily: "'Kaushan Script', cursive"}}>
+          Votre <span style={{ color: '#0865FE' }}>visa</span>.<br/>Simple, rapide, officiel.
+        </h1>
+    );
+    if (language === 'ar') return (
+        <h1 className="font-extrabold leading-[1.1] text-[#002161]" style={{ fontSize: 'clamp(36px,5vw,64px)', letterSpacing: '-1px',fontFamily: "'Kaushan Script', cursive" }}>
+          <span style={{ color: '#0865FE' }}>تأشيرتك</span>.<br/>بسيطة، سريعة، رسمية.
+        </h1>
+    );
+    return (
+        <h1 className="font-extrabold leading-[1.1] text-[#002161]" style={{ fontSize: 'clamp(36px,5vw,64px)', letterSpacing: '-1px' , fontFamily: "'Kaushan Script', cursive"}}>
+          Your <span style={{ color: '#0865FE' }}>visa</span>.<br/>Simple, fast, official.
+        </h1>
+    );
+  };
+
+  const heroSub =
+      language === 'ar' ? 'اطلب تأشيرتك عبر الإنترنت بسهولة وسافر بكل اطمئنان.'
+          : language === 'fr' ? "Demandez votre visa en ligne facilement et partez en toute sérénité."
+              : 'Apply for your visa online easily and travel with peace of mind.';
+
   const stepDefs = [
-    { icon: Globe,          label: 'visaStepDestination' },
-    { icon: FileText,       label: 'visaStepType' },
-    { icon: ClipboardCheck, label: 'visaStepInformation' },
-    { icon: UserPlus,       label: 'visaStepPassengers' },
-    { icon: Upload,         label: 'visaStepDocuments' },
-    { icon: CreditCard,     label: 'visaStepPayment' },
-    { icon: CheckCircle2,   label: 'visaStepConfirmation' },
+    { icon: Globe,          key: 'destination' },
+    { icon: FileText,       key: 'visaType' },
+    { icon: ClipboardCheck, key: 'info' },
+    { icon: UserPlus,       key: 'passengers' },
+    { icon: Upload,         key: 'documents' },
+    { icon: CreditCard,     key: 'payment' },
+    { icon: CheckCircle2,   key: 'confirmation' },
   ];
+
+  const stepsLabels: Record<string, { fr: string; en: string; ar: string }> = {
+    destination:  { fr: 'Destination',  en: 'Destination',  ar: 'الوجهة' },
+    visaType:     { fr: 'Type de visa', en: 'visa type',    ar: 'نوع التأشيرة' },
+    info:         { fr: 'Informations', en: 'Information',  ar: 'المعلومات' },
+    passengers:   { fr: 'Passagers',    en: 'Passengers',   ar: 'المسافرون' },
+    documents:    { fr: 'Documents',    en: 'Documents',    ar: 'المستندات' },
+    payment:      { fr: 'Paiement',     en: 'Payment',      ar: 'الدفع' },
+    confirmation: { fr: 'Confirmation', en: 'Confirmation', ar: 'التأكيد' },
+  };
 
   return (
       <div className="min-h-screen bg-[#e6f0fa] relative overflow-hidden flex flex-col w-full">
@@ -720,14 +761,12 @@ const Visa = () => {
 
           {/* ══════════════════ HERO ═════════════════════════════════════════════ */}
           <section className="relative min-h-[550px] md:min-h-[650px] flex items-center w-full">
-            <div className="container mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center pt-[calc(6rem+env(safe-area-inset-top,0px))] md:pt-24">
+            <div className="container mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center pt-24">
 
               <div className="w-full md:w-7/12 lg:w-1/2 text-left mt-10 md:mt-0">
-                <h1 className="font-extrabold leading-[1.1] text-[#002161]" style={{ fontSize: 'clamp(36px,5vw,64px)', fontFamily: "'Kaushan Script', cursive" }}>
-                  <span style={{ color: '#0865FE' }}>{t('visaHeroTitleStart')}</span><br />{t('visaHeroTitleEnd')}
-                </h1>
+                {renderHeadline()}
                 <p className="mt-4 text-[#002161]/80 text-base sm:text-lg md:text-xl max-w-md font-medium">
-                  {t('visaHeroSubtitle')}
+                  {heroSub}
                 </p>
 
                 {/* Search bar */}
@@ -739,11 +778,14 @@ const Visa = () => {
                     <input
                         value={heroSearch}
                         onChange={e => setHeroSearch(e.target.value)}
-                        placeholder={t('searchPlaceholder')}
-                        aria-label={t('visaSearchAriaLabel')}
+                        placeholder={
+                          language === 'ar' ? 'ابحث عن وجهة...'
+                              : language === 'fr' ? 'Rechercher une destination...'
+                                  : 'Search a destination...'
+                        }
                         className="flex-1 bg-transparent border-0 outline-none text-gray-900 placeholder:text-gray-400 text-sm sm:text-base w-full"
                     />
-                    <button aria-label={t('visaSearchAriaLabel')} className="w-8 h-8 sm:w-10 sm:h-10 shrink-0 rounded-full flex items-center justify-center text-gray-400 hover:text-[#002161] hover:bg-blue-50 transition-colors">
+                    <button className="w-8 h-8 sm:w-10 sm:h-10 shrink-0 rounded-full flex items-center justify-center text-gray-400 hover:text-[#002161] hover:bg-blue-50 transition-colors">
                       <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
                     </button>
                   </div>
@@ -761,17 +803,17 @@ const Visa = () => {
             <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between mb-8 gap-4">
               <div>
                 <h2 className="text-2xl md:text-3xl font-extrabold text-[#002161]">
-                  {t('popularDestinations')}
+                  {language === 'ar' ? 'الوجهات الشائعة' : language === 'fr' ? 'Destinations populaires' : 'Popular destinations'}
                 </h2>
                 <p className="text-[#0a192f]/70 mt-1 text-sm sm:text-base font-medium">
-                  {countryGroups.length} {t('visaDestinationCountLabel')}
+                  {countryGroups.length} {language === 'ar' ? 'وجهة متاحة' : language === 'fr' ? 'destinations disponibles' : 'destinations available'}
                 </p>
               </div>
               <Link
                   to="/destinations"
                   className="shrink-0 w-full sm:w-auto justify-center bg-white/80 backdrop-blur text-[#002161] hover:text-blue-600 font-semibold text-sm inline-flex items-center gap-2 px-5 py-2.5 rounded-full border border-white hover:border-blue-200 shadow-sm transition-all"
               >
-                {t('allDestinations')}
+                {language === 'ar' ? 'عرض كل الوجهات' : language === 'fr' ? 'Voir toutes les destinations' : 'View all destinations'}
                 <ArrowRight className="w-4 h-4 rtl:rotate-180" />
               </Link>
             </div>
@@ -788,7 +830,8 @@ const Visa = () => {
                 ))}
 
                 {featuredCards.map((g) => {
-                  const photo = getCountryPhoto(g.images ?? []);
+                  const heroImage = g.images?.find(img => img.imageType === 'HERO' || img.imageType === 'GALLERY');
+                  const photo = (heroImage?.url || countryPhotos[g.code.toLowerCase()] || FALLBACK_PHOTO).trim();
                   const flagImage = g.images?.find(img => img.imageType === 'FLAG');
                   const flagUrl = (flagImage?.url || `https://flagcdn.com/w80/${g.code.toLowerCase()}.png`).trim();
 
@@ -808,35 +851,32 @@ const Visa = () => {
                           <img src={flagUrl} alt="" className="w-8 h-8 rounded-full border-2 border-white object-cover shadow-md bg-white" />
                         </div>
 
-                        <div className="w-full h-[150px] sm:h-[160px] overflow-hidden rounded-t-2xl relative bg-white">
-                          {photo && (
-                              <img
-                                  src={photo}
-                                  alt={localizedName(g)}
-                                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                                  loading="lazy"
-                                  onError={(e) => {
-                                    e.currentTarget.style.display = 'none';
-                                    e.currentTarget.parentElement?.querySelector('[data-photo-overlay]')?.remove();
-                                  }}
-                              />
-                          )}
-                          {photo && <div data-photo-overlay className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />}
+                        <div className="w-full h-[150px] sm:h-[160px] overflow-hidden rounded-t-2xl relative bg-gray-100">
+                          <img
+                              src={photo}
+                              alt={localizedName(g)}
+                              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                              loading="lazy"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = FALLBACK_PHOTO;
+                              }}
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
                         </div>
 
                         <div className="p-4 sm:p-5 flex flex-col flex-1 justify-between bg-white rounded-b-2xl">
                           <div>
                             <h4 className="text-[#002161] text-base sm:text-lg font-bold leading-tight">{localizedName(g)}</h4>
-                            <p className="text-gray-500 text-xs font-medium mt-1">{t('visaElectronicCardLabel')}</p>
+                            <p className="text-gray-500 text-xs font-medium mt-1">Visa électronique</p>
                           </div>
 
                           <div className="mt-4 sm:mt-5 flex items-end justify-between border-t border-gray-50 pt-4">
                             <div>
                               <p className="text-[10px] text-gray-400 font-semibold mb-0.5 uppercase tracking-wide">
-                                {t('startingFrom')}
+                                {language === 'fr' ? 'À partir de' : language === 'ar' ? 'ابتداءً من' : 'From'}
                               </p>
                               <p className="font-bold text-[#002161] text-base sm:text-lg leading-none">
-                                {lowestPrice > 0 ? `${new Intl.NumberFormat(language === 'ar' ? 'ar-DZ' : language === 'fr' ? 'fr-DZ' : 'en-GB').format(lowestPrice)} DZD` : '—'}
+                                {lowestPrice > 0 ? `${lowestPrice.toLocaleString()} DZD` : '—'}
                               </p>
                             </div>
                             <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
@@ -851,7 +891,7 @@ const Visa = () => {
 
               {/* Slider Navigation */}
               <div className="flex items-center justify-center gap-4 mt-2 sm:mt-4">
-                <button aria-label={t('visaPreviousDestinations')} onClick={() => scrollByCards(-1)} className="text-blue-600 hover:text-blue-800 transition-colors p-2">
+                <button onClick={() => scrollByCards(-1)} className="text-blue-600 hover:text-blue-800 transition-colors p-2">
                   <ChevronLeft className="w-5 h-5" />
                 </button>
 
@@ -872,7 +912,7 @@ const Visa = () => {
                   );
                 })()}
 
-                <button aria-label={t('visaNextDestinations')} onClick={() => scrollByCards(1)} className="text-blue-600 hover:text-blue-800 transition-colors p-2">
+                <button onClick={() => scrollByCards(1)} className="text-blue-600 hover:text-blue-800 transition-colors p-2">
                   <ChevronRight className="w-5 h-5" />
                 </button>
               </div>
@@ -890,10 +930,12 @@ const Visa = () => {
                   className="text-center mb-10 sm:mb-16 max-w-2xl mx-auto"
               >
                 <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-[#002161]">
-                  {t('visaStepsTitle')}
+                  {language === 'ar' ? 'احصل على تأشيرتك في خطوات بسيطة' : language === 'fr' ? 'Obtenez votre visa en étapes simples' : 'Get your visa in simple steps'}
                 </h2>
                 <p className="text-gray-500 mt-3 sm:mt-4 text-sm font-medium">
-                    {t('visaStepsDescription')}
+                  {language === 'ar' ? 'تجربة سلسة من الاختيار إلى تأكيد التأشيرة.'
+                      : language === 'fr' ? "Une expérience fluide, du choix de la destination à la confirmation du visa."
+                          : 'A smooth experience, from picking your destination to visa confirmation.'}
                 </p>
               </motion.div>
 
@@ -916,7 +958,7 @@ const Visa = () => {
                         </div>
                         <div className="flex flex-col items-center">
                           <span className="text-[10px] font-bold text-gray-400 mb-0.5">{String(i + 1).padStart(2, '0')}</span>
-                          <span className="text-xs font-bold text-[#002161] leading-tight">{t(s.label)}</span>
+                          <span className="text-xs font-bold text-[#002161] leading-tight">{stepsLabels[s.key][language]}</span>
                         </div>
                       </motion.div>
                   ))}
@@ -929,7 +971,7 @@ const Visa = () => {
                     onClick={scrollToDestinations}
                     className="w-full bg-[#002161] sm:w-auto rounded-2xl px-8 py-6 text-base shadow-xl shadow-blue-600/20 hover:opacity-90 transition-opacity text-white font-bold"
                 >
-                  {t('visaStartApplication')}
+                  {language === 'ar' ? 'ابدأ طلب التأشيرة' : language === 'fr' ? 'Démarrer ma demande' : 'Start my application'}
                   <ArrowRight className="w-5 h-5 ms-2" />
                 </Button>
               </div>
@@ -956,10 +998,10 @@ const Visa = () => {
 
               <div className="relative z-10 p-8 sm:p-10 md:p-12 text-center flex-1 flex flex-col items-center w-full">
                 <h2 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-extrabold text-white mb-3 sm:mb-4 leading-tight">
-                  {t('visaFreeCountries')}
+                  {language === 'ar' ? 'دول بدون تأشيرة للجزائريين' : language === 'fr' ? 'Pays sans visa pour les Algériens' : 'visa-free countries for Algerians'}
                 </h2>
                 <p className="text-blue-100 mb-6 sm:mb-8 max-w-sm mx-auto text-xs sm:text-sm font-medium">
-                  {t('visaFreeDesc')}
+                  {t('visaFreeDesc') || 'Découvrez la liste des pays accessibles sans visa ou avec visa à l\'arrivée.'}
                 </p>
                 <Link to="/visa-free" className="w-full sm:w-auto">
                   <Button
@@ -967,7 +1009,7 @@ const Visa = () => {
                       size="lg"
                       className="w-full sm:w-auto font-bold rounded-full px-8 bg-white hover:bg-gray-50 text-[#002161] transition-colors shadow-lg"
                   >
-                    {t('visaFreeViewList')} <ArrowRight className="w-4 h-4 ms-2" />
+                    {language === 'ar' ? 'عرض القائمة' : language === 'fr' ? 'Voir la liste' : 'View list'} <ArrowRight className="w-4 h-4 ms-2" />
                   </Button>
                 </Link>
               </div>

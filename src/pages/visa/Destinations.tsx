@@ -460,11 +460,7 @@ function groupByCountry(visas: VisaType[]): CountryGroup[] {
           `https://flagcdn.com/w80/${c.code.toLowerCase()}.png`,
 
       hero_url:
-          imgs.find((i) => i.imageType === 'GALLERY' && i.isMain)?.url ??
-          imgs.find((i) => i.imageType === 'GALLERY')?.url ??
-          imgs.find((i) => i.imageType === 'HERO' && i.isMain)?.url ??
-          imgs.find((i) => i.imageType === 'HERO')?.url ??
-          null,
+          imgs.find((i) => i.imageType === 'HERO')?.url ?? null,
 
       thumb_url:
           imgs.find((i) => i.imageType === 'THUMBNAIL')?.url ?? null,

@@ -93,6 +93,9 @@ export interface BookFlightResult {
     orderId: string;
     status: string;
     dbId: string;
+    id?: string;
+    bookingId?: string;
+    [key: string]: any;
 }
 
 export interface OrderReserveResult {

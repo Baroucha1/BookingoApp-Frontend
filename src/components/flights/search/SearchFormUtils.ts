@@ -50,6 +50,10 @@ export interface FormState {
     preferredAirlines?: string[];
 }
 
+const inSevenDays = new Date();
+inSevenDays.setDate(inSevenDays.getDate() + 7);
+export const nextWeek = toLocalISO(inSevenDays);
+
 export const emptyLeg = (): Leg => ({ origin: '', destination: '', date: today });
 
 export const defaultForm: FormState = {
@@ -57,7 +61,7 @@ export const defaultForm: FormState = {
     departVol1: '',
     destinationVol1: '',
     departleVol1: today,
-    retourleVol1: '',
+    retourleVol1: nextWeek,
     legs: [emptyLeg()],
     qteADT: 1,
     qteCHD: 0,

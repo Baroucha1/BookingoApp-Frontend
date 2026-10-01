@@ -1230,7 +1230,6 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
-import { useLanguage } from '@/i18n/LanguageContext';
 import PassportScanner, { type MrzResult } from '@/components/PassportScanner';
 import { uploadFile } from '@/service/upload.service';
 import { createFullApplication } from '@/service/visaApplication.service';
@@ -1241,13 +1240,13 @@ const formatAmount = (amount: number) => `${amount.toFixed(2)} DA`;
 
 type Passenger = PassengerInput & { id: string };
 
-const newPassenger = (nationality = 'Algérienne'): Passenger => ({
+const newPassenger = (): Passenger => ({
     id: `pax-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     firstName: '',
     lastName: '',
     birthDate: '',
     birthPlace: '',
-    nationality,
+    nationality: 'Algérienne',
     passportNumber: '',
     passportIssueDate: '',
     passportExpiryDate: '',
@@ -1260,39 +1259,30 @@ declare global {
     }
 }
 
-const BROKEN_BAHRAIN_PHOTO_ID = 'photo-1573504320674-e0bbe14969b0';
-const BAHRAIN_PHOTO = 'https://images.unsplash.com/photo-1588172739076-929ab3c0cdbe?fit=crop&w=1200&h=800&q=85';
-
-type ApplyCountry = {
-    code: string;
-    nameFr: string;
-    nameEn: string;
-    nameAr: string;
-    flagUrl: string;
-    images: { url: string; imageType: string; isMain: boolean }[];
+const COUNTRY_PHOTOS: Record<string, string> = {
+    tr: 'https://images.unsplash.com/photo-1524231757912-21f4fe3a7200?w=800&q=80',
+    eg: 'https://images.unsplash.com/photo-1539768942893-daf53e448371?w=800&q=80',
+    th: 'https://images.unsplash.com/photo-1528181304800-259b08848526?w=800&q=80',
+    jo: 'https://images.unsplash.com/photo-1580834341580-8c17a3a630ca?w=800&q=80',
+    id: 'https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=800&q=80',
+    qa: 'https://images.unsplash.com/photo-1565552645632-d725f8bfc19a?w=800&q=80',
+    az: 'https://images.unsplash.com/photo-1596402184320-417e7178b2cd?w=800&q=80',
+    am: 'https://images.unsplash.com/photo-1610116306796-6fea9f4fae38?w=800&q=80',
+    ae: 'https://images.unsplash.com/photo-1512453979798-5ea266f8880c?w=800&q=80',
+    tn: 'https://images.unsplash.com/photo-1605216663980-b7ca6e9f2451?w=800&q=80',
+    ma: 'https://images.unsplash.com/photo-1489749798305-4fea3ae63d43?w=800&q=80',
+    sa: 'https://images.unsplash.com/photo-1578895101408-1a36b834405b?w=800&q=80',
+    cn: 'https://images.unsplash.com/photo-1508804185872-d7badad00f7d?w=800&q=80',
 };
 
-const getCountryPhoto = (country?: ApplyCountry): string | null => {
-    const images = country?.images ?? [];
-    const galleryImages = images.filter((image) => image.imageType === 'GALLERY');
-    const photo =
-        galleryImages.find((image) => image.isMain)?.url ??
-        galleryImages[0]?.url ??
-        images.find((image) => image.imageType === 'HERO' && image.isMain)?.url ??
-        images.find((image) => image.imageType === 'HERO')?.url ??
-        null;
-
-    if (!photo) return null;
-    if (country?.code === 'bh' && photo.includes(BROKEN_BAHRAIN_PHOTO_ID)) return BAHRAIN_PHOTO;
-    return photo.trim();
-};
+const FALLBACK_COUNTRY_PHOTO =
+    'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=800&q=80';
 
 const Apply = () => {
     const navigate = useNavigate();
     const { toast } = useToast();
     const [searchParams] = useSearchParams();
     const { user } = useAuth();
-    const { t, language } = useLanguage();
 
     const preselectedCountry =
         (searchParams.get('country') || '').toLowerCase();
@@ -1305,7 +1295,7 @@ const Apply = () => {
     const [startDate, setStartDate] = useState('');
     const [numberOfPeople, setNumberOfPeople] = useState(1);
     const [passengers, setPassengers] = useState<Passenger[]>([
-        newPassenger(t('applyNationalityPlaceholder')),
+        newPassenger(),
     ]);
     const [files, setFiles] =
         useState<Record<string, Record<string, File>>>({});
@@ -1316,17 +1306,12 @@ const Apply = () => {
         useState<string | null>(null);
     const [paymentMethod, setPaymentMethod] =
         useState<'satim' | 'agence'>('satim');
-    const [offices, setOffices] = useState<Array<{ id: string; name: string; wilaya: string }>>([]);
-    const [officesLoading, setOfficesLoading] = useState(true);
-    const [selectedOfficeId, setSelectedOfficeId] = useState('');
     const [termsAccepted, setTermsAccepted] = useState(false);
-    const [cancellationPolicyAccepted, setCancellationPolicyAccepted] = useState(false);
-    const [informationAccuracyAccepted, setInformationAccuracyAccepted] = useState(false);
-    const [visaDecisionAccepted, setVisaDecisionAccepted] = useState(false);
     const [showConditions, setShowConditions] = useState(false);
     const [captchaVerified, setCaptchaVerified] = useState(false);
     const recaptchaRef = useRef<HTMLDivElement>(null);
     const recaptchaWidgetId = useRef<number | null>(null);
+    const skipRecaptcha = import.meta.env.VITE_SKIP_RECAPTCHA === 'true';
     const [countrySearch, setCountrySearch] = useState('');
     const [infoConfirmed, setInfoConfirmed] = useState(false);
     const [expandedPax, setExpandedPax] = useState<string | null>(null);
@@ -1335,29 +1320,53 @@ const Apply = () => {
     const [autofilled, setAutofilled] =
         useState<Record<string, Set<string>>>({});
 
-    const allRequiredConsentsAccepted =
-        cancellationPolicyAccepted &&
-        informationAccuracyAccepted &&
-        visaDecisionAccepted;
-
+    // Auto-fill account info if logged in or when token info loads
     useEffect(() => {
-        let cancelled = false;
-        fetch(`${import.meta.env.VITE_API_URL ?? ''}/api/contact/offices`)
-            .then((res) => {
-                if (!res.ok) throw new Error('Unable to load offices');
-                return res.json();
-            })
-            .then((data) => {
-                if (!cancelled) setOffices(data);
-            })
-            .catch((error) => console.error('[Apply] offices:', error))
-            .finally(() => {
-                if (!cancelled) setOfficesLoading(false);
+        const token = localStorage.getItem('token');
+        if (user) {
+            if (user.email) setEmail(prev => prev || user.email);
+            if (user.phone) setPhone(prev => prev || user.phone || '');
+            setPassengers(prev => {
+                if (prev.length === 0) return prev;
+                const first = prev[0];
+                if (first.firstName && first.lastName && first.email) return prev;
+                const updated = [...prev];
+                updated[0] = {
+                    ...first,
+                    firstName: first.firstName || user.name || '',
+                    lastName: first.lastName || user.lastName || '',
+                    email: first.email || user.email || '',
+                };
+                return updated;
             });
-        return () => {
-            cancelled = true;
-        };
-    }, []);
+        }
+        if (token) {
+            fetch(`${import.meta.env.VITE_API_URL}/api/auth/me`, {
+                headers: { Authorization: `Bearer ${token}` },
+            })
+                .then(r => r.ok ? r.json() : null)
+                .then(data => {
+                    if (!data) return;
+                    if (data.email) setEmail(prev => prev || data.email);
+                    if (data.phone) setPhone(prev => prev || data.phone);
+                    setPassengers(prev => {
+                        if (prev.length === 0) return prev;
+                        const first = prev[0];
+                        const updated = [...prev];
+                        updated[0] = {
+                            ...first,
+                            firstName: first.firstName || data.name || '',
+                            lastName: first.lastName || data.lastName || '',
+                            email: first.email || data.email || '',
+                            passportNumber: first.passportNumber || data.profile?.passportNumber || '',
+                            nationality: first.nationality || data.profile?.nationality || 'Algérienne',
+                        };
+                        return updated;
+                    });
+                })
+                .catch(() => {});
+        }
+    }, [user]);
 
     const popularDestinationsRef = useRef<HTMLDivElement>(null);
 
@@ -1379,6 +1388,7 @@ const Apply = () => {
     })();
 
     useEffect(() => {
+        if (skipRecaptcha) return;
         if (document.getElementById('recaptcha-script')) return;
 
         const script = document.createElement('script');
@@ -1390,10 +1400,10 @@ const Apply = () => {
         script.defer = true;
 
         document.head.appendChild(script);
-    }, []);
+    }, [skipRecaptcha]);
 
     useEffect(() => {
-        if (step !== 3 || paymentMethod !== 'satim') return;
+        if (step !== 3 || paymentMethod !== 'satim' || skipRecaptcha) return;
 
         const tryRender = () => {
             if (!window.grecaptcha || !recaptchaRef.current) {
@@ -1403,18 +1413,22 @@ const Apply = () => {
 
             if (recaptchaWidgetId.current !== null) return;
 
-            recaptchaWidgetId.current = window.grecaptcha.render(
-                recaptchaRef.current,
-                {
-                    sitekey: import.meta.env.VITE_RECAPTCHA_SITE_KEY,
-                    callback: () => setCaptchaVerified(true),
-                    'expired-callback': () => setCaptchaVerified(false),
-                }
-            );
+            try {
+                recaptchaWidgetId.current = window.grecaptcha.render(
+                    recaptchaRef.current,
+                    {
+                        sitekey: import.meta.env.VITE_RECAPTCHA_SITE_KEY,
+                        callback: () => setCaptchaVerified(true),
+                        'expired-callback': () => setCaptchaVerified(false),
+                    }
+                );
+            } catch (e) {
+                console.warn('reCAPTCHA render notice:', e);
+            }
         };
 
         tryRender();
-    }, [step, paymentMethod]);
+    }, [step, paymentMethod, skipRecaptcha]);
 
     useEffect(() => {
         setCaptchaVerified(false);
@@ -1423,7 +1437,11 @@ const Apply = () => {
             recaptchaWidgetId.current !== null &&
             window.grecaptcha
         ) {
-            window.grecaptcha.reset(recaptchaWidgetId.current);
+            try {
+                window.grecaptcha.reset(recaptchaWidgetId.current);
+            } catch {
+                // ignore
+            }
             recaptchaWidgetId.current = null;
         }
     }, [paymentMethod]);
@@ -1467,7 +1485,18 @@ const Apply = () => {
             });
     }, [user]);
 
-    const [dbCountries, setDbCountries] = useState<ApplyCountry[]>([]);
+    const [dbCountries, setDbCountries] = useState<
+        {
+            code: string;
+            name: string;
+            flagUrl: string;
+            images: {
+                url: string;
+                imageType: string;
+                isMain: boolean;
+            }[];
+        }[]
+    >([]);
 
     useEffect(() => {
         (async () => {
@@ -1482,9 +1511,7 @@ const Apply = () => {
             setDbCountries(
                 data.map((c: any) => ({
                     code: c.code.toLowerCase(),
-                    nameFr: c.nameFr,
-                    nameEn: c.nameEn,
-                    nameAr: c.nameAr,
+                    name: c.nameFr,
                     images: c.images ?? [],
                     flagUrl: (
                         c.images?.find(
@@ -1497,30 +1524,17 @@ const Apply = () => {
         })();
     }, []);
 
-    const getCountryName = (value?: ApplyCountry) => {
-        if (!value) return '';
-        return language === 'ar'
-            ? value.nameAr || value.nameFr
-            : language === 'en'
-                ? value.nameEn || value.nameFr
-                : value.nameFr;
-    };
-
     const countries = useMemo(
         () =>
             [...dbCountries].sort((a, b) =>
-                getCountryName(a).localeCompare(
-                    getCountryName(b),
-                    language === 'ar' ? 'ar' : language === 'en' ? 'en' : 'fr'
-                )
+                a.name.localeCompare(b.name, 'fr')
             ),
-        [dbCountries, language]
+        [dbCountries]
     );
 
     const country = countries.find(
         (c) => c.code === countryCode
     );
-    const countryPhoto = getCountryPhoto(country);
 
     const otherPopularCountries = countries.filter(
         (c) => c.code !== countryCode
@@ -1565,27 +1579,6 @@ const Apply = () => {
         (v) => v.id === visaTypeId
     ) as VisaType | undefined;
 
-    const getVisaName = (visa: VisaType) =>
-        language === 'ar'
-            ? visa.nameAr || visa.nameFr
-            : language === 'en'
-                ? visa.nameEn || visa.nameFr
-                : visa.nameFr;
-
-    const getVisaDescription = (visa: VisaType) =>
-        language === 'ar'
-            ? visa.descriptionAr || visa.descriptionFr
-            : language === 'en'
-                ? visa.descriptionEn || visa.descriptionFr
-                : visa.descriptionFr;
-
-    const getDocumentLabel = (requirement: VisaTypeDocumentRequirement) =>
-        language === 'ar'
-            ? requirement.documentType?.labelAr || requirement.documentType?.labelFr
-            : language === 'en'
-                ? requirement.documentType?.labelEn || requirement.documentType?.labelFr
-                : requirement.documentType?.labelFr;
-
     const totalPrice = selectedVisa
         ? Number(selectedVisa.price) * numberOfPeople
         : 0;
@@ -1627,8 +1620,9 @@ const Apply = () => {
     ) => {
         if (!user) {
             toast({
-                title: t('applyToastLoginRequired'),
-                description: t('applyToastLoginDescription'),
+                title: 'Connexion requise',
+                description:
+                    'Connectez-vous pour finaliser votre demande.',
                 variant: 'destructive',
             });
 
@@ -1663,7 +1657,7 @@ const Apply = () => {
             }));
 
             toast({
-                title: t('applyToastFileSelected'),
+                title: 'Fichier sélectionné',
                 description: file.name,
             });
         };
@@ -1680,7 +1674,7 @@ const Apply = () => {
                     ...prev,
                     ...Array.from(
                         { length: n - prev.length },
-                        () => newPassenger(t('applyNationalityPlaceholder'))
+                        newPassenger
                     ),
                 ];
             }
@@ -1713,7 +1707,7 @@ const Apply = () => {
     const addPax = () => {
         setPassengers((p) => [
             ...p,
-            newPassenger(t('applyNationalityPlaceholder')),
+            newPassenger(),
         ]);
 
         setNumberOfPeople((n) => n + 1);
@@ -1771,7 +1765,7 @@ const Apply = () => {
         }
     })();
 
-    const submitApplication = async (officeId?: string): Promise<{
+    const submitApplication = async (): Promise<{
         applicationId: string;
     }> => {
         const uploadedDocs: Record<
@@ -1808,7 +1802,6 @@ const Apply = () => {
             numberOfPeople,
             clientId: clientProfileId ?? null,
             agencyId: null,
-            officeId: officeId ?? null,
 
             passengers: passengers.map((pax) => ({
                 firstName: pax.firstName,
@@ -1835,52 +1828,77 @@ const Apply = () => {
 
         localStorage.removeItem('apply_draft');
 
-        setAppId(
-            result.data.applicationId
-        );
+        const createdId =
+            result?.data?.id ||
+            result?.id ||
+            result?.data?.applicationId ||
+            result?.applicationId;
 
-        return result.data;
+        if (createdId) {
+            setAppId(createdId);
+        }
+
+        return { ...result?.data, id: createdId, applicationId: createdId };
     };
 
     const handlePaySatim = async () => {
-        if (!allRequiredConsentsAccepted) {
-            toast({ title: t('applyToastIncomplete'), description: t('applyConsentsRequired'), variant: 'destructive' });
-            return;
-        }
-
         setSubmitting(true);
 
         try {
-            const captchaToken =
-                window.grecaptcha.getResponse(
-                    recaptchaWidgetId.current
-                );
+            let captchaToken = '';
+            if (!skipRecaptcha) {
+                if (window.grecaptcha?.getResponse) {
+                    try {
+                        captchaToken = recaptchaWidgetId.current !== null
+                            ? window.grecaptcha.getResponse(recaptchaWidgetId.current)
+                            : window.grecaptcha.getResponse();
+                    } catch {
+                        captchaToken = '';
+                    }
+                }
 
-            if (!captchaToken) {
-                toast({
-                    title: t('applyToastCaptchaRequired'),
-                    description: t('applyToastCaptchaDescription'),
-                    variant: 'destructive',
-                });
+                if (!captchaToken) {
+                    toast({
+                        title: 'reCAPTCHA requis',
+                        description:
+                            'Veuillez valider le reCAPTCHA avant de continuer.',
+                        variant: 'destructive',
+                    });
 
-                setSubmitting(false);
-                return;
+                    setSubmitting(false);
+                    return;
+                }
             }
 
             const result =
                 await submitApplication();
 
+            const targetAppId =
+                result?.id ||
+                result?.applicationId ||
+                result?.data?.id ||
+                result?.data?.applicationId ||
+                appId;
+
+            if (!targetAppId) {
+                throw new Error("Identifiant de la demande introuvable après création.");
+            }
+
             const { formUrl } =
                 await initiateSatimPayment(
-                    result.applicationId,
+                    targetAppId,
                     captchaToken
                 );
 
             window.location.href = formUrl;
         } catch (err: any) {
+            const rawMsg = err?.message ?? '';
+            const msg = (rawMsg && rawMsg !== 'null' && rawMsg !== '[object Object]')
+                ? rawMsg
+                : "Une erreur est survenue lors de l'initiation du paiement SATIM.";
             toast({
-                title: t('applyToastPaymentError'),
-                description: err.message,
+                title: 'Erreur paiement SATIM',
+                description: msg,
                 variant: 'destructive',
             });
 
@@ -1889,34 +1907,21 @@ const Apply = () => {
     };
 
     const handlePayAgence = async () => {
-        if (!allRequiredConsentsAccepted) {
-            toast({ title: t('applyToastIncomplete'), description: t('applyConsentsRequired'), variant: 'destructive' });
-            return;
-        }
-
-        if (!selectedOfficeId) {
-            toast({
-                title: t('applyOfficeRequired'),
-                description: t('applyOfficeRequiredDescription'),
-                variant: 'destructive',
-            });
-            return;
-        }
-
         setSubmitting(true);
 
         try {
-            await submitApplication(selectedOfficeId);
+            await submitApplication();
 
             toast({
-                title: t('applyToastApplicationSaved'),
-                description: t('applyToastAgencyPayment'),
+                title: 'Demande enregistrée',
+                description:
+                    'Rendez-vous en agence pour finaliser le paiement.',
             });
 
             navigate('/client/applications');
         } catch (err: any) {
             toast({
-                title: t('applyToastError'),
+                title: 'Erreur',
                 description: err.message,
                 variant: 'destructive',
             });
@@ -1928,8 +1933,9 @@ const Apply = () => {
     const next = async () => {
         if (!canNext) {
             toast({
-                title: t('applyToastIncomplete'),
-                description: t('applyToastChooseDestination'),
+                title: 'Sélection incomplète',
+                description:
+                    'Veuillez choisir une destination et un type de visa.',
                 variant: 'destructive',
             });
 
@@ -1941,7 +1947,11 @@ const Apply = () => {
 
     const back = () => {
         if (step <= 1) {
-            navigate('/');
+            if (window.history.length > 1) {
+                navigate(-1);
+            } else {
+                navigate('/visa');
+            }
             return;
         }
 
@@ -1964,8 +1974,9 @@ const Apply = () => {
         );
 
         toast({
-            title: t('applyToastDraftSaved'),
-            description: t('applyToastResumeDraft'),
+            title: 'Brouillon enregistré',
+            description:
+                'Vous pouvez reprendre votre demande plus tard.',
         });
     };
 
@@ -1989,14 +2000,30 @@ const Apply = () => {
         return Briefcase;
     };
 
-    const formatDate = (iso: string) =>
-        iso
-            ? new Intl.DateTimeFormat(t('applyDateLocale'), {
-                day: 'numeric',
-                month: 'long',
-                year: 'numeric',
-            }).format(new Date(`${iso}T00:00:00`))
-            : '';
+    const formatDate = (iso: string) => {
+        if (!iso) return '';
+
+        const [y, m, d] = iso.split('-');
+
+        const months = [
+            'Janvier',
+            'Février',
+            'Mars',
+            'Avril',
+            'Mai',
+            'Juin',
+            'Juillet',
+            'Août',
+            'Septembre',
+            'Octobre',
+            'Novembre',
+            'Décembre',
+        ];
+
+        return `${parseInt(d)} ${
+            months[parseInt(m) - 1]
+        } ${y}`;
+    };
 
 
     const scrollPopularDestinations = (
@@ -2032,11 +2059,13 @@ const Apply = () => {
                     </div>
 
                     <h1 className="text-2xl font-bold text-gray-900">
-                        {t('applySuccessTitle')}
+                        Demande soumise avec succès !
                     </h1>
 
                     <p className="text-gray-500 text-sm">
-                        {t('applySuccessMessage').replace('{country}', getCountryName(country))}
+                        Votre demande pour{' '}
+                        <strong>{country?.name}</strong> a été
+                        enregistrée.
                     </p>
 
                     <div className="inline-block border-2 border-blue-100 rounded-full px-6 py-2">
@@ -2052,7 +2081,7 @@ const Apply = () => {
                             }
                             className="text-white font-semibold rounded-full px-6 bg-[#0865FE]"
                         >
-                            {t('applyMyApplications')}
+                            Voir mes demandes
                         </Button>
 
                         <Button
@@ -2060,7 +2089,7 @@ const Apply = () => {
                             onClick={() => navigate('/client')}
                             className="rounded-full px-6"
                         >
-                            {t('applyDashboard')}
+                            Tableau de bord
                         </Button>
                     </div>
                 </div>
@@ -2072,7 +2101,24 @@ const Apply = () => {
         <div className="min-h-screen relative overflow-hidden bg-[#F4F6FB] pb-20 sm:pb-24">
             <div className="absolute inset-0 pointer-events-none opacity-[0.03] bg-[url('/assets/map-pattern.png')] bg-cover bg-center" />
 
-            <div className="container relative z-10 max-w-7xl mx-auto px-3 sm:px-4 pt-4 sm:pt-8 lg:pt-12">
+            <div
+                className="container relative z-10 max-w-7xl mx-auto px-3 sm:px-4"
+                style={{
+                    paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1rem)',
+                }}
+            >
+
+                {/* ── Top Back Button ── */}
+                <div className="mb-4">
+                    <button
+                        type="button"
+                        onClick={() => window.history.length > 1 ? navigate(-1) : navigate('/visa')}
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-gray-200 text-gray-700 hover:text-[#0865FE] hover:border-[#0865FE]/30 font-semibold text-xs shadow-xs hover:shadow-sm transition-all cursor-pointer"
+                    >
+                        <ArrowLeft className="w-3.5 h-3.5" />
+                        <span>Retour aux visas</span>
+                    </button>
+                </div>
 
                 {/* ─────────────────────────────────────────────
             HEADER / STEPPER
@@ -2082,11 +2128,11 @@ const Apply = () => {
 
                     <div className="lg:w-1/4">
                         <h2 className="text-lg sm:text-2xl font-bold text-[#002161]">
-                            {t('applyTitle')}
+                            Votre demande de visa
                         </h2>
 
                         <p className="text-[11px] sm:text-sm text-gray-500 mt-0.5">
-                            {t('applySubtitle')}
+                            Simple, rapide et 100% en ligne
                         </p>
                     </div>
 
@@ -2133,11 +2179,11 @@ const Apply = () => {
                                             : "text-gray-800"
                                     )}
                                 >
-                                    {t('applyStepCountry')}
+                                    Destination
                                 </div>
 
                                 <div className="text-gray-400 text-[10px] sm:text-[11px] hidden sm:block">
-                                    {t('applyDestinationPrompt')}
+                                    Choisissez votre pays
                                 </div>
                             </div>
                         </div>
@@ -2185,11 +2231,11 @@ const Apply = () => {
                                             : "text-gray-800"
                                     )}
                                 >
-                                    {t('applyStepTravelers')}
+                                    Voyageurs
                                 </div>
 
                                 <div className="text-gray-400 text-[10px] sm:text-[11px] hidden sm:block">
-                                    {t('applyStepTravelersHint')}
+                                    Informations et documents
                                 </div>
                             </div>
                         </div>
@@ -2237,11 +2283,11 @@ const Apply = () => {
                                             : "text-gray-800"
                                     )}
                                 >
-                                    {t('applyStepPayment')}
+                                    Paiement
                                 </div>
 
                                 <div className="text-gray-400 text-[10px] sm:text-[11px] hidden sm:block">
-                                    {t('applyStepPaymentHint')}
+                                    Paiement sécurisé
                                 </div>
                             </div>
                         </div>
@@ -2276,11 +2322,12 @@ const Apply = () => {
 
                                         <div className="min-w-0">
                                             <h3 className="text-[17px] sm:text-[22px] font-bold text-[#002161]">
-                                                {t('applyDestinationPrompt')}
+                                                Où souhaitez-vous voyager ?
                                             </h3>
 
                                             <p className="text-[11px] sm:text-[13px] text-gray-500 mt-0.5">
-                                                {t('applyAvailableCountries').replace('{count}', String(countries.length))}
+                                                Choisissez votre destination parmi{' '}
+                                                {countries.length} pays disponibles
                                             </p>
                                         </div>
 
@@ -2298,7 +2345,7 @@ const Apply = () => {
                                                     onChange={(e) =>
                                                         setCountrySearch(e.target.value)
                                                     }
-                                                    placeholder={t('applySearchCountry')}
+                                                    placeholder="Rechercher un pays..."
                                                     className="w-full h-11 rounded-xl border border-gray-200 pl-10 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-[#0865FE]/20 focus:border-[#0865FE] bg-gray-50/50"
                                                 />
 
@@ -2317,7 +2364,7 @@ const Apply = () => {
                                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3 max-h-[380px] overflow-y-auto pr-1 custom-scrollbar">
                                                 {countries
                                                     .filter((c) =>
-                                                        getCountryName(c)
+                                                        c.name
                                                             .toLowerCase()
                                                             .includes(
                                                                 countrySearch
@@ -2326,7 +2373,18 @@ const Apply = () => {
                                                             )
                                                     )
                                                     .map((c) => {
-                                                        const cphoto = getCountryPhoto(c);
+                                                        const heroImg =
+                                                            c.images?.find(
+                                                                (img: any) =>
+                                                                    img.imageType === 'HERO' ||
+                                                                    img.imageType === 'GALLERY'
+                                                            );
+
+                                                        const cphoto = (
+                                                            heroImg?.url ||
+                                                            COUNTRY_PHOTOS[c.code] ||
+                                                            FALLBACK_COUNTRY_PHOTO
+                                                        ).trim();
 
                                                         return (
                                                             <button
@@ -2334,25 +2392,22 @@ const Apply = () => {
                                                                 onClick={() =>
                                                                     setCountryCode(c.code)
                                                                 }
-                                                                className="group relative h-[100px] sm:h-[110px] rounded-2xl overflow-hidden text-left border-2 border-transparent hover:border-blue-200 shadow-sm transition-all w-full bg-white"
+                                                                className="group relative h-[100px] sm:h-[110px] rounded-2xl overflow-hidden text-left border-2 border-transparent hover:border-blue-200 shadow-sm transition-all w-full"
                                                             >
-                                                                {cphoto && (
-                                                                    <img
-                                                                        src={cphoto}
-                                                                        alt={getCountryName(c)}
-                                                                        loading="lazy"
-                                                                        className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                                                                        onError={(e) => {
-                                                                            const container = e.currentTarget.parentElement;
-                                                                            e.currentTarget.style.display = 'none';
-                                                                            container?.querySelector('[data-photo-overlay]')?.remove();
-                                                                            const label = container?.querySelector('[data-photo-label]') as HTMLElement | null;
-                                                                            if (label) label.style.color = '#002161';
-                                                                        }}
-                                                                    />
-                                                                )}
+                                                                <img
+                                                                    src={cphoto}
+                                                                    alt={c.name}
+                                                                    loading="lazy"
+                                                                    className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                                                                    onError={(e) => {
+                                                                        (
+                                                                            e.target as HTMLImageElement
+                                                                        ).src =
+                                                                            FALLBACK_COUNTRY_PHOTO;
+                                                                    }}
+                                                                />
 
-                                                                {cphoto && <div data-photo-overlay className="absolute inset-0 bg-gradient-to-t from-[#002161]/80 via-black/20 to-transparent" />}
+                                                                <div className="absolute inset-0 bg-gradient-to-t from-[#002161]/80 via-black/20 to-transparent" />
 
                                                                 <div className="absolute top-2 start-2 w-6 h-6 sm:w-7 sm:h-7 rounded-full border-[1.5px] border-white shadow-md overflow-hidden bg-white">
                                                                     <img
@@ -2363,8 +2418,8 @@ const Apply = () => {
                                                                 </div>
 
                                                                 <div className="absolute inset-x-0 bottom-0 p-2">
-                                  <span data-photo-label className={`${cphoto ? 'text-white drop-shadow-md' : 'text-[#002161]'} text-[12px] sm:text-[13px] font-bold leading-tight block truncate`}>
-                                    {getCountryName(c)}
+                                  <span className="text-white text-[12px] sm:text-[13px] font-bold drop-shadow-md leading-tight block truncate">
+                                    {c.name}
                                   </span>
                                                                 </div>
                                                             </button>
@@ -2379,24 +2434,40 @@ const Apply = () => {
 
                                             {/* SELECTED COUNTRY */}
 
-                                            <div className="relative h-36 sm:h-60 lg:h-68 rounded-[18px] sm:rounded-[24px] overflow-hidden mb-4 sm:mb-5 shadow-md border border-gray-100 bg-white">
+                                            <div className="relative h-36 sm:h-60 lg:h-68 rounded-[18px] sm:rounded-[24px] overflow-hidden mb-4 sm:mb-5 shadow-md border border-gray-100">
 
-                                                {countryPhoto && (
-                                                    <img
-                                                        src={countryPhoto}
-                                                        alt={getCountryName(country)}
-                                                        className="absolute inset-0 w-full h-full object-cover"
-                                                        onError={(e) => {
-                                                            const container = e.currentTarget.parentElement;
-                                                            e.currentTarget.style.display = 'none';
-                                                            container?.querySelector('[data-photo-overlay]')?.remove();
-                                                            const label = container?.querySelector('[data-photo-label]') as HTMLElement | null;
-                                                            if (label) label.style.color = '#002161';
-                                                        }}
-                                                    />
-                                                )}
+                                                {(() => {
+                                                    const heroImg =
+                                                        country?.images?.find(
+                                                            (img: any) =>
+                                                                img.imageType === 'HERO' ||
+                                                                img.imageType === 'GALLERY'
+                                                        );
 
-                                                {countryPhoto && <div data-photo-overlay className="absolute inset-0 bg-gradient-to-t from-[#002161]/90 via-black/20 to-transparent" />}
+                                                    const photo = (
+                                                        heroImg?.url ||
+                                                        (country
+                                                            ? COUNTRY_PHOTOS[country.code]
+                                                            : null) ||
+                                                        FALLBACK_COUNTRY_PHOTO
+                                                    ).trim();
+
+                                                    return (
+                                                        <img
+                                                            src={photo}
+                                                            alt={country?.name}
+                                                            className="absolute inset-0 w-full h-full object-cover"
+                                                            onError={(e) => {
+                                                                (
+                                                                    e.target as HTMLImageElement
+                                                                ).src =
+                                                                    FALLBACK_COUNTRY_PHOTO;
+                                                            }}
+                                                        />
+                                                    );
+                                                })()}
+
+                                                <div className="absolute inset-0 bg-gradient-to-t from-[#002161]/90 via-black/20 to-transparent" />
 
                                                 <div className="absolute top-3 left-3 sm:top-5 sm:left-5 w-9 h-9 sm:w-12 sm:h-12 rounded-full overflow-hidden border-[2.5px] border-white shadow-lg bg-white">
                                                     <img
@@ -2407,14 +2478,14 @@ const Apply = () => {
                                                 </div>
 
                                                 <div className="absolute bottom-3 left-3 sm:bottom-5 sm:left-5">
-                                                    <h2 data-photo-label className={`${countryPhoto ? 'text-white drop-shadow-md' : 'text-[#002161]'} text-lg sm:text-3xl font-extrabold`}>
-                                                        {getCountryName(country)}
+                                                    <h2 className="text-white text-lg sm:text-3xl font-extrabold drop-shadow-md">
+                                                        {country?.name}
                                                     </h2>
 
                                                     <div className="bg-black/30 backdrop-blur-md border border-white/20 text-white text-[9px] sm:text-[11px] font-medium px-2.5 sm:px-3 py-1 rounded-full mt-1.5 inline-flex items-center">
                                                         <CheckCircle2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 mr-1.5 text-white/90" />
 
-                                                        {t('applySelectedDestination')}
+                                                        Destination sélectionnée
                                                     </div>
                                                 </div>
                                             </div>
@@ -2430,7 +2501,7 @@ const Apply = () => {
                                                 <div className="flex items-center justify-between gap-2 mb-2 sm:mb-3">
 
                                                     <h4 className="font-bold text-[#002161] text-[12px] sm:text-[14px]">
-                                                        {t('applyOtherPopular')}
+                                                        Autres destinations populaires
                                                     </h4>
 
                                                     <button
@@ -2438,7 +2509,7 @@ const Apply = () => {
                                                         onClick={() => navigate('/destinations')}
                                                         className="flex items-center gap-1 text-[#0865FE] text-[10px] sm:text-[11px] font-bold whitespace-nowrap shrink-0 hover:text-blue-700 active:scale-95 transition-all"
                                                     >
-                                                        {t('applyAllDestinations')}
+                                                        Voir toutes les destinations
 
                                                         <ChevronRight className="w-3.5 h-3.5" />
                                                     </button>
@@ -2456,7 +2527,7 @@ const Apply = () => {
                                                         onClick={() =>
                                                             scrollPopularDestinations('left')
                                                         }
-                                                        aria-label={t('applyPreviousDestinations')}
+                                                        aria-label="Voir les destinations précédentes"
                                                         className="shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-white border border-gray-200 shadow-sm flex items-center justify-center text-[#0865FE] hover:bg-[#0865FE] hover:text-white hover:border-[#0865FE] transition-all active:scale-95 z-10"
                                                     >
                                                         <ArrowLeft className="w-4 h-4" />
@@ -2481,14 +2552,14 @@ const Apply = () => {
                                                                     <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-full border border-gray-200 shadow-sm overflow-hidden bg-white transition-all group-hover:scale-105 group-hover:border-blue-300">
                                                                         <img
                                                                             src={c.flagUrl}
-                                                                            alt={getCountryName(c)}
+                                                                            alt={c.name}
                                                                             loading="lazy"
                                                                             className="w-full h-full object-cover"
                                                                         />
                                                                     </div>
 
                                                                     <span className="text-[9px] sm:text-[11px] font-medium text-gray-700 text-center max-w-[52px] sm:max-w-[64px] leading-tight group-hover:text-blue-600 transition-colors truncate w-full block">
-              {getCountryName(c)}
+              {c.name}
             </span>
                                                                 </button>
                                                             )
@@ -2502,7 +2573,7 @@ const Apply = () => {
                                                         onClick={() =>
                                                             scrollPopularDestinations('right')
                                                         }
-                                                        aria-label={t('applyMoreDestinations')}
+                                                        aria-label="Voir plus de destinations"
                                                         className="shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-white border border-gray-200 shadow-sm flex items-center justify-center text-[#0865FE] hover:bg-[#0865FE] hover:text-white hover:border-[#0865FE] transition-all active:scale-95 z-10"
                                                     >
                                                         <ArrowRight className="w-4 h-4" />
@@ -2520,11 +2591,11 @@ const Apply = () => {
                                 <div className="bg-white rounded-[20px] sm:rounded-[24px] p-3.5 sm:p-6 lg:p-8 shadow-sm border border-gray-100 flex flex-col h-full min-h-[320px] sm:min-h-[380px]">
 
                                     <h3 className="text-[17px] sm:text-[22px] font-bold text-[#002161]">
-                                        {t('applyVisaTypeTitle')}
+                                        Sélectionnez le type de visa
                                     </h3>
 
                                     <p className="text-[11px] sm:text-[13px] text-gray-500 mt-0.5 mb-4 sm:mb-5">
-                                        {t('applyVisaTypePrompt')}
+                                        Choisissez le visa qui correspond à votre voyage
                                     </p>
 
                                     {!countryCode ? (
@@ -2536,11 +2607,11 @@ const Apply = () => {
                                             </div>
 
                                             <h4 className="text-gray-800 font-bold text-sm mb-1">
-                                                {t('applyNoDestination')}
+                                                Aucune destination choisie
                                             </h4>
 
                                             <p className="text-xs text-gray-500 max-w-[240px]">
-                                                {t('applySelectCountryFirst')}
+                                                Veuillez d'abord sélectionner un pays pour voir les visas disponibles.
                                             </p>
                                         </div>
 
@@ -2563,7 +2634,7 @@ const Apply = () => {
                                                 {!visaTypesLoading &&
                                                     visaTypes.length === 0 && (
                                                         <div className="p-6 rounded-[20px] border-2 border-dashed border-gray-200 text-xs text-gray-500 text-center bg-gray-50/50">
-                                                            {t('applyNoVisaTypes')}
+                                                            Aucun type de visa n'est actuellement configuré pour ce pays.
                                                         </div>
                                                     )}
 
@@ -2572,8 +2643,8 @@ const Apply = () => {
                                                         const isSelected =
                                                             visaTypeId === v.id;
 
-                                                        const localizedVisaName = getVisaName(v);
-                                                        const Icon = visaIcon(localizedVisaName);
+                                                        const Icon =
+                                                            visaIcon(v.nameFr);
 
                                                         return (
                                                             <button
@@ -2606,23 +2677,24 @@ const Apply = () => {
                                                                         <div className="flex-1 min-w-0">
 
                                                                             <h4 className="font-bold text-[#002161] text-[13px] sm:text-base leading-tight">
-                                                                                {localizedVisaName} — {t('applyDuration').replace('{days}', String(v.duration))}
+                                                                                {v.nameFr} — {v.duration} jours
                                                                             </h4>
 
                                                                             <p className="text-[10px] sm:text-[12px] text-gray-500 mt-1 line-clamp-2">
-                                                                                {getVisaDescription(v) || t('applyTourismDescription')}
+                                                                                {v.descriptionFr ||
+                                                                                    "Idéal pour les voyages touristiques ou vacances."}
                                                                             </p>
 
                                                                             <div className="flex flex-wrap gap-1.5 mt-2.5">
 
                                         <span className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-semibold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-100">
                                           <CheckCircle2 className="w-3 h-3" />
-                                            {t('applyProcessingDelay').replace('{days}', String(v.processingDelay))}
+                                            {v.processingDelay} j. ouvrés
                                         </span>
 
                                                                                 <span className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-semibold px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-100">
                                           <Calendar className="w-3 h-3" />
-                                                                                    {t('applyValidity').replace('{days}', String(v.duration))}
+                                                                                    {v.duration} j. validité
                                         </span>
 
                                                                             </div>
@@ -2639,7 +2711,7 @@ const Apply = () => {
                                                                             </div>
 
                                                                             <div className="text-gray-400 text-[9px] sm:text-[10px] mt-1 font-medium">
-                                                                                {t('applyPerPerson')}
+                                                                                / pers.
                                                                             </div>
                                                                         </div>
 
@@ -2672,11 +2744,11 @@ const Apply = () => {
 
                                                 <div>
                                                     <div className="font-bold text-[#002161] text-[11px] sm:text-[13px]">
-                                                        {t('applyGoodToKnow')}
+                                                        Bon à savoir
                                                     </div>
 
                                                     <div className="text-[10px] sm:text-[11px] text-gray-500 mt-0.5 leading-relaxed">
-                                                        {t('applyEntryPassportTip')}
+                                                        Vérifiez les conditions d'entrée et la validité de votre passeport avant de commencer.
                                                     </div>
                                                 </div>
                                             </div>
@@ -2699,11 +2771,11 @@ const Apply = () => {
 
                                         <div className="mb-3">
                                             <h3 className="text-xl sm:text-2xl font-bold text-[#002161]">
-                                                {t('applyInfoTravelers')}
+                                                Informations & Voyageurs
                                             </h3>
 
                                             <p className="text-[11px] sm:text-[13px] text-gray-500 mt-0.5">
-                                                {t('applyInfoSubtitle')}
+                                                Renseignez les détails du contact et les informations des voyageurs.
                                             </p>
                                         </div>
 
@@ -2727,11 +2799,11 @@ const Apply = () => {
 
                                                             <div>
                                                                 <h4 className="font-bold text-[#002161] text-sm sm:text-base">
-                                                                    {t('applyPrimaryContact')}
+                                                                    Contact principal
                                                                 </h4>
 
                                                                 <p className="text-[10px] sm:text-xs text-gray-500">
-                                                                    {t('applyContactFollowup')}
+                                                                    Ces informations seront utilisées pour le suivi.
                                                                 </p>
                                                             </div>
                                                         </div>
@@ -2745,7 +2817,7 @@ const Apply = () => {
                                                             >
                                                                 <Edit2 className="w-3 h-3 text-[#0865FE]" />
                                                                 <span className="text-[#0865FE]">
-                                  {t('applyEdit')}
+                                  Modifier
                                 </span>
                                                             </button>
                                                         )}
@@ -2759,7 +2831,7 @@ const Apply = () => {
 
                                                                 <div className="space-y-1.5">
                                                                     <Label className="text-[12px] font-semibold text-[#002161]">
-                                                                        {t('applyEmail')} *
+                                                                        Email *
                                                                     </Label>
 
                                                                     <div className="relative">
@@ -2781,7 +2853,7 @@ const Apply = () => {
 
                                                                 <div className="space-y-1.5">
                                                                     <Label className="text-[12px] font-semibold text-[#002161]">
-                                                                        {t('applyPhone')} *
+                                                                        Téléphone *
                                                                     </Label>
 
                                                                     <div className="flex gap-2">
@@ -2817,7 +2889,7 @@ const Apply = () => {
 
                                                                 <div className="space-y-1.5">
                                                                     <Label className="text-[12px] font-semibold text-[#002161]">
-                                                                        {t('applyEstimatedDeparture')} *
+                                                                        Date de départ estimée *
                                                                     </Label>
 
                                                                     <div className="relative">
@@ -2839,7 +2911,7 @@ const Apply = () => {
 
                                                                 <div className="space-y-1.5">
                                                                     <Label className="text-[12px] font-semibold text-[#002161]">
-                                                                        {t('applyNumberTravelers')} *
+                                                                        Nombre de voyageurs *
                                                                     </Label>
 
                                                                     <div className="flex items-center justify-between sm:justify-start gap-3 h-11 p-1 bg-gray-50 rounded-xl border border-gray-200 w-full sm:w-max">
@@ -2898,9 +2970,9 @@ const Apply = () => {
                                                                         ) {
                                                                             toast({
                                                                                 title:
-                                                                                    t('applyToastMissingFields'),
+                                                                                    'Champs manquants',
                                                                                 description:
-                                                                                    t('applyToastCompleteFields'),
+                                                                                    'Veuillez compléter tous les champs.',
                                                                                 variant:
                                                                                     'destructive',
                                                                             });
@@ -2917,7 +2989,7 @@ const Apply = () => {
                                                                     }}
                                                                     className="w-full sm:w-auto text-white font-bold rounded-full px-7 h-11 bg-[#0865FE] hover:bg-blue-700"
                                                                 >
-                                                                    {t('applyConfirmContact')}
+                                                                    Confirmer le contact
                                                                     <Check className="w-4 h-4 ml-2" />
                                                                 </Button>
 
@@ -2945,7 +3017,7 @@ const Apply = () => {
                                                             <span className="flex items-center gap-1.5">
                                 <Calendar className="w-3.5 h-3.5 text-[#0865FE]" />
                                 <span>
-                                  {t('applyDeparture')}{' '}
+                                  Départ:{' '}
                                     <strong>
                                     {formatDate(
                                         startDate
@@ -2957,7 +3029,7 @@ const Apply = () => {
                                                             <span className="flex items-center gap-1.5">
                                 <Users className="w-3.5 h-3.5 text-[#0865FE]" />
                                 <span>
-                                  {numberOfPeople} {t('applyPersonsShort')}
+                                  {numberOfPeople} pers.
                                 </span>
                               </span>
 
@@ -2981,7 +3053,7 @@ const Apply = () => {
                                             <div className="flex items-center justify-between mb-3.5">
 
                                                 <h4 className="text-base sm:text-lg font-bold text-[#002161] flex items-center gap-2">
-                                                    {t('applyTravelerDetails')}
+                                                    Détails des voyageurs
 
                                                     {passengers.every(
                                                             paxComplete
@@ -3006,7 +3078,7 @@ const Apply = () => {
                                                     className="rounded-full text-[12px] font-semibold h-8 px-3 border-gray-200 hover:border-[#0865FE] hover:text-[#0865FE]"
                                                 >
                                                     <Plus className="w-3.5 h-3.5 mr-1" />
-                                                    {t('applyAddTraveler')}
+                                                    Ajouter
                                                 </Button>
                                             </div>
 
@@ -3094,7 +3166,7 @@ const Apply = () => {
                                                                         <p className="font-bold text-[13px] sm:text-[14px] text-[#002161] truncate">
                                                                             {p.firstName
                                                                                 ? `${p.firstName} ${p.lastName}`
-                                                                                : t('applyTravelerNumber').replace('{number}', String(i + 1))}
+                                                                                : `Voyageur ${i + 1}`}
                                                                         </p>
 
                                                                         <div className="flex items-center gap-2 mt-0.5">
@@ -3108,15 +3180,16 @@ const Apply = () => {
                                           )}
                                       >
                                         {statusOk
-                                            ? t('applyFileComplete')
-                                            : t('applyToComplete')}
+                                            ? 'Dossier complet'
+                                            : 'À compléter'}
                                       </span>
 
                                                                             {!statusOk && (
                                                                                 <span className="text-[10px] text-gray-500">
-                                                                                    {t('applyDocumentCount')
-                                                                                        .replace('{uploaded}', String(fileCount(p.id)))
-                                                                                        .replace('{required}', String(reqCount))}
+                                          ({fileCount(
+                                                                                    p.id
+                                                                                )}
+                                                                                    /{reqCount} doc.)
                                         </span>
                                                                             )}
 
@@ -3152,7 +3225,7 @@ const Apply = () => {
                                                                             className="w-full sm:w-auto rounded-full text-[12px] h-8 px-3.5 font-bold bg-gray-900 text-white hover:bg-gray-800"
                                                                         >
                                                                             <ScanLine className="w-3.5 h-3.5 mr-1.5" />
-                                                                            {t('applyScanPassport')}
+                                                                            Scanner Passeport
                                                                         </Button>
 
                                                                         {passengers.length >
@@ -3168,7 +3241,7 @@ const Apply = () => {
                                                                                     className="w-full sm:w-auto text-red-500 hover:text-red-700 hover:bg-red-50 rounded-full h-8 px-3 text-xs font-semibold"
                                                                                 >
                                                                                     <Trash2 className="w-3.5 h-3.5 mr-1" />
-                                                                                    {t('applyRemoveTraveler')}
+                                                                                    Retirer ce voyageur
                                                                                 </Button>
                                                                             )}
                                                                     </div>
@@ -3177,9 +3250,7 @@ const Apply = () => {
                                                                         ?.size ? (
                                                                         <div className="flex items-start gap-2 p-2.5 rounded-xl text-[12px] bg-emerald-50 border border-emerald-100 text-emerald-800 font-medium">
                                                                             <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600" />
-                                                                            <span>
-                                                                                {t('mrzAutofillDetails')} {t('mrzManualFields')}
-                                                                            </span>
+                                                                            Champs remplis automatiquement depuis la photo du passeport.
                                                                         </div>
                                                                     ) : null}
 
@@ -3187,69 +3258,69 @@ const Apply = () => {
 
                                                                         {([
                                                                             {
-                                                                                label: `${t('applyFirstName')} *`,
+                                                                                label: 'Prénom *',
                                                                                 field: 'firstName',
                                                                                 type: 'text',
                                                                                 placeholder:
-                                                                                    t('applyFirstNameExample'),
+                                                                                    'Ex: Amine',
                                                                             },
                                                                             {
-                                                                                label: `${t('applyLastName')} *`,
+                                                                                label: 'Nom *',
                                                                                 field: 'lastName',
                                                                                 type: 'text',
                                                                                 placeholder:
-                                                                                    t('applyLastNameExample'),
+                                                                                    'Ex: Benali',
                                                                             },
                                                                             {
                                                                                 label:
-                                                                                    `${t('applyBirthDate')} *`,
+                                                                                    'Date de naissance *',
                                                                                 field: 'birthDate',
                                                                                 type: 'date',
                                                                                 placeholder:
-                                                                                    t('applyDatePlaceholder'),
+                                                                                    'jj/mm/aaaa',
                                                                             },
                                                                             {
                                                                                 label:
-                                                                                    `${t('applyBirthPlace')} *`,
+                                                                                    'Lieu de naissance *',
                                                                                 field: 'birthPlace',
                                                                                 type: 'text',
                                                                                 placeholder:
-                                                                                    t('applyBirthPlacePlaceholder'),
+                                                                                    'Ville, Pays',
                                                                             },
                                                                             {
                                                                                 label:
-                                                                                    `${t('applyNationality')} *`,
+                                                                                    'Nationalité *',
                                                                                 field: 'nationality',
                                                                                 type: 'text',
                                                                                 placeholder:
-                                                                                    t('applyNationalityPlaceholder'),
+                                                                                    'Algérienne',
                                                                             },
                                                                             {
                                                                                 label:
-                                                                                    `${t('applyPassportNumber')} *`,
+                                                                                    'N° de passeport *',
                                                                                 field:
                                                                                     'passportNumber',
                                                                                 type: 'text',
                                                                                 placeholder:
-                                                                                    t('applyPassportExample'),
+                                                                                    'Ex: 123456789',
                                                                             },
                                                                             {
                                                                                 label:
-                                                                                    `${t('applyPassportIssueDate')} *`,
+                                                                                    "Date d'émission *",
                                                                                 field:
                                                                                     'passportIssueDate',
                                                                                 type: 'date',
                                                                                 placeholder:
-                                                                                    t('applyDatePlaceholder'),
+                                                                                    'jj/mm/aaaa',
                                                                             },
                                                                             {
                                                                                 label:
-                                                                                    `${t('applyPassportExpiryDate')} *`,
+                                                                                    "Date d'expiration *",
                                                                                 field:
                                                                                     'passportExpiryDate',
                                                                                 type: 'date',
                                                                                 placeholder:
-                                                                                    t('applyDatePlaceholder'),
+                                                                                    'jj/mm/aaaa',
                                                                             },
                                                                         ] as const).map(
                                                                             ({
@@ -3305,7 +3376,7 @@ const Apply = () => {
                                                                         <div className="sm:col-span-2 space-y-1">
 
                                                                             <Label className="text-[11px] font-semibold text-[#002161]">
-                                                                                {t('applyTravelerEmail')} ({t('applyOptional')})
+                                                                                Email du voyageur (Optionnel)
                                                                             </Label>
 
                                                                             <input
@@ -3313,7 +3384,7 @@ const Apply = () => {
                                                                                 value={
                                                                                     p.email ?? ''
                                                                                 }
-                                                                                placeholder={t('applyNotificationsPlaceholder')}
+                                                                                placeholder="Pour recevoir les notifications"
                                                                                 onChange={(e) =>
                                                                                     updatePax(
                                                                                         p.id,
@@ -3338,7 +3409,7 @@ const Apply = () => {
                                                                             <div className="flex items-center justify-between mb-3">
 
                                                                                 <h5 className="font-bold text-[13px] text-[#002161]">
-                                                                                    {t('applyRequiredDocuments')}
+                                                                                    Documents requis
                                                                                 </h5>
 
                                                                                 <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-[#0865FE]">
@@ -3361,7 +3432,7 @@ const Apply = () => {
                                                                                         const label =
                                                                                             req
                                                                                                 .documentType
-                                                                                                ? getDocumentLabel(req) :
+                                                                                                ?.labelFr ??
                                                                                             req.id;
 
                                                                                         const file =
@@ -3428,7 +3499,7 @@ const Apply = () => {
 
                                                                                                     toast({
                                                                                                         title:
-                                                                                                            t('applyToastFileAdded'),
+                                                                                                            'Fichier ajouté',
                                                                                                         description:
                                                                                                         dropped.name,
                                                                                                     });
@@ -3458,7 +3529,7 @@ const Apply = () => {
 
                                                                                                             {!req.isRequired && (
                                                                                                                 <span className="ml-1 font-normal text-gray-400">
-                                                          ({t('applyOptional')})
+                                                          (Optionnel)
                                                         </span>
                                                                                                             )}
                                                                                                         </p>
@@ -3473,7 +3544,7 @@ const Apply = () => {
                                                                                                         >
                                                                                                             {file
                                                                                                                 ? file.name
-                                                                                                                : t('applyFileFormat')}
+                                                                                                                : 'PDF, JPG ou PNG • max 5MB'}
                                                                                                         </p>
                                                                                                     </div>
 
@@ -3509,8 +3580,8 @@ const Apply = () => {
                                                                                                     <Upload className="w-3 h-3 mr-1.5" />
 
                                                                                                     {file
-                                                                                                        ? t('applyReplace')
-                                                                                                        : t('applyUpload')}
+                                                                                                        ? 'Remplacer'
+                                                                                                        : 'Téléverser'}
                                                                                                 </Button>
 
                                                                                             </div>
@@ -3539,11 +3610,11 @@ const Apply = () => {
 
                                         <div className="mb-3 text-center">
                                             <h3 className="text-xl sm:text-2xl font-bold text-[#002161]">
-                                                {t('applyPaymentTitle')}
+                                                Dernière étape : Le Paiement
                                             </h3>
 
                                             <p className="text-[11px] sm:text-[13px] text-gray-500 mt-0.5">
-                                                {t('applyPaymentSubtitle')}
+                                                Vérifiez le résumé et procédez au règlement.
                                             </p>
                                         </div>
 
@@ -3556,7 +3627,7 @@ const Apply = () => {
                                                 <div className="flex items-center justify-between mb-4">
 
                                                     <h4 className="font-bold text-[#002161] text-sm sm:text-base">
-                                                        {t('applyTripSummary')}
+                                                        Résumé du voyage
                                                     </h4>
 
                                                     <button
@@ -3565,7 +3636,7 @@ const Apply = () => {
                                                         }
                                                         className="text-[11px] font-semibold text-[#0865FE] hover:underline"
                                                     >
-                                                        {t('applyEdit')}
+                                                        Modifier
                                                     </button>
                                                 </div>
 
@@ -3583,11 +3654,11 @@ const Apply = () => {
 
                                                     <div>
                                                         <p className="font-bold text-[#002161] text-base leading-tight">
-                                                            {getCountryName(country)}
+                                                            {country?.name}
                                                         </p>
 
                                                         <p className="text-[12px] text-gray-500 font-medium">
-                                                            {getVisaName(selectedVisa)}
+                                                            {selectedVisa.nameFr}
                                                         </p>
                                                     </div>
                                                 </div>
@@ -3596,23 +3667,23 @@ const Apply = () => {
 
                                                     {[
                                                         {
-                                                            label: t('applyTravelers'),
-                                                            value: t('applyPeopleCount').replace('{count}', String(numberOfPeople)),
+                                                            label: 'Voyageurs',
+                                                            value: `${numberOfPeople} personne(s)`,
                                                         },
                                                         {
-                                                            label: t('applyTravelDate'),
+                                                            label: 'Date départ',
                                                             value:
                                                                 formatDate(
                                                                     startDate
                                                                 ),
                                                         },
                                                         {
-                                                            label: t('applyValidityLabel'),
-                                                            value: t('applyValidity').replace('{days}', String(selectedVisa.duration)),
+                                                            label: 'Validité',
+                                                            value: `${selectedVisa.duration} jours`,
                                                         },
                                                         {
-                                                            label: t('applyAverageDelay'),
-                                                            value: t('applyProcessingDelay').replace('{days}', String(selectedVisa.processingDelay)),
+                                                            label: 'Délai moyen',
+                                                            value: `${selectedVisa.processingDelay} j. ouvrés`,
                                                         },
                                                     ].map((item, i) => (
                                                         <div
@@ -3635,7 +3706,7 @@ const Apply = () => {
                                                     <div className="flex items-end justify-between">
 
                             <span className="text-xs sm:text-sm font-bold text-gray-800">
-                              {t('applyTotal')}
+                              Total
                             </span>
 
                                                         <span className="text-xl sm:text-2xl font-black text-[#FFB400]">
@@ -3652,7 +3723,7 @@ const Apply = () => {
                                             <div className="flex flex-col gap-3.5">
 
                                                 <h4 className="font-bold text-[#002161] text-sm sm:text-base">
-                                                    {t('applyPaymentMethod')}
+                                                    Méthode de paiement
                                                 </h4>
 
                                                 <button
@@ -3702,7 +3773,7 @@ const Apply = () => {
                                                         </p>
 
                                                         <p className="text-[11px] text-gray-500">
-                                                            {t('applySatimDescription')}
+                                                            Paiement en ligne sécurisé via SATIM
                                                         </p>
                                                     </div>
                                                 </button>
@@ -3749,72 +3820,14 @@ const Apply = () => {
 
                                                     <div>
                                                         <p className="font-bold text-[13px] text-[#002161]">
-                                                            {t('applyAgencyPayment')}
+                                                            Paiement en agence
                                                         </p>
 
                                                         <p className="text-[11px] text-gray-500">
-                                                            {t('applyAgencyDescription')}
+                                                            Finalisez en espèces à notre bureau
                                                         </p>
                                                     </div>
                                                 </button>
-
-                                                <div className="space-y-3 rounded-xl border border-gray-100 bg-gray-50 p-3">
-                                                    <label className="flex items-start gap-2.5 text-xs leading-relaxed text-gray-700">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={cancellationPolicyAccepted}
-                                                            onChange={(event) => setCancellationPolicyAccepted(event.target.checked)}
-                                                            className="mt-0.5 h-4 w-4 shrink-0 accent-[#0865FE]"
-                                                        />
-                                                        <span>
-                                                            {t('applyAcceptCancellationLead')}
-                                                            <a href="/cancellation" target="_blank" rel="noopener noreferrer" className="font-semibold text-[#0865FE] underline underline-offset-2">
-                                                                {t('applyCancellationPolicyLink')}
-                                                            </a>.
-                                                        </span>
-                                                    </label>
-                                                    <label className="flex items-start gap-2.5 text-xs leading-relaxed text-gray-700">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={informationAccuracyAccepted}
-                                                            onChange={(event) => setInformationAccuracyAccepted(event.target.checked)}
-                                                            className="mt-0.5 h-4 w-4 shrink-0 accent-[#0865FE]"
-                                                        />
-                                                        <span>{t('applyAccuracyConsent')}</span>
-                                                    </label>
-                                                    <label className="flex items-start gap-2.5 text-xs leading-relaxed text-gray-700">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={visaDecisionAccepted}
-                                                            onChange={(event) => setVisaDecisionAccepted(event.target.checked)}
-                                                            className="mt-0.5 h-4 w-4 shrink-0 accent-[#0865FE]"
-                                                        />
-                                                        <span>{t('applyVisaDecisionConsent')}</span>
-                                                    </label>
-                                                </div>
-
-                                                {paymentMethod === 'agence' && (
-                                                    <div className="min-w-0 w-full space-y-2 pt-1">
-                                                        <label htmlFor="apply-office" className="block text-xs leading-relaxed font-semibold text-[#002161]">
-                                                            {t('applyChooseOffice')}
-                                                        </label>
-                                                        <select
-                                                            id="apply-office"
-                                                            value={selectedOfficeId}
-                                                            onChange={(event) => setSelectedOfficeId(event.target.value)}
-                                                            className="block box-border min-w-0 max-w-full w-full truncate rounded-xl border border-gray-200 bg-white px-3 py-3 text-sm text-gray-700 focus:border-[#0865FE] focus:outline-none focus:ring-2 focus:ring-[#0865FE]/20"
-                                                        >
-                                                            <option value="">{t('applySelectOffice')}</option>
-                                                            {offices.map((office) => (
-                                                                <option key={office.id} value={office.id}>
-                                                                    {office.name} · {office.wilaya}
-                                                                </option>
-                                                            ))}
-                                                        </select>
-                                                        {officesLoading && <p className="text-xs text-amber-600">{t('applyLoadingOffices')}</p>}
-                                                        {!officesLoading && !offices.length && <p className="text-xs text-amber-600">{t('applyNoOffices')}</p>}
-                                                    </div>
-                                                )}
 
                                                 {paymentMethod ===
                                                     'satim' && (
@@ -3836,7 +3849,7 @@ const Apply = () => {
                                                                 />
 
                                                                 <span className="text-[11px] text-gray-600 leading-snug">
-                                {t('applyAcceptTerms')}{' '}
+                                J'accepte les{' '}
                                                                     <button
                                                                         type="button"
                                                                         onClick={(e) => {
@@ -3847,16 +3860,18 @@ const Apply = () => {
                                                                         }}
                                                                         className="font-bold text-[#0865FE] hover:underline"
                                                                     >
-                                                                    {t('applyTermsOfUse')}
+                                  conditions d'utilisation
                                 </button>
-                                                                {t('applyTermsPeriod')}
+                                .
                               </span>
 
                                                             </label>
 
-                                                            <div className="flex justify-center scale-75 origin-left overflow-hidden">
-                                                                <div ref={recaptchaRef} />
-                                                            </div>
+                                                            {!skipRecaptcha && (
+                                                                <div className="flex justify-center scale-75 origin-left overflow-hidden">
+                                                                    <div ref={recaptchaRef} />
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     )}
                                             </div>
@@ -3872,7 +3887,7 @@ const Apply = () => {
                                                     <div className="flex items-center justify-between">
 
                                                         <h2 className="text-lg font-bold text-[#002161]">
-                                                            {t('applyTermsTitle')}
+                                                            Conditions d'utilisation
                                                         </h2>
 
                                                         <button
@@ -3890,11 +3905,11 @@ const Apply = () => {
                                                     <div className="text-[12px] text-gray-600 leading-relaxed space-y-2.5 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
 
                                                         <p>
-                                                            {t('applyTermsPayment')}
+                                                            En procédant à ce paiement, vous acceptez nos conditions d'utilisation et les conditions générales de paiement en ligne établies par notre partenaire bancaire (CIB / EDAHABIA).
                                                         </p>
 
                                                         <p>
-                                                            {t('applyTermsSecurity')}
+                                                            Le montant est traité de manière sécurisée via <strong>SATIM I-PAY</strong>. Les paiements ne sont pas remboursables.
                                                         </p>
                                                     </div>
 
@@ -3911,7 +3926,7 @@ const Apply = () => {
                                                             }}
                                                             className="text-white font-bold rounded-full px-6 h-9 bg-[#0865FE] hover:bg-blue-700 text-xs"
                                                         >
-                                                            {t('applyAcceptClose')}
+                                                            Accepter & Fermer
                                                         </Button>
                                                     </div>
                                                 </div>
@@ -3930,18 +3945,18 @@ const Apply = () => {
 
                 <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3 mt-5 sm:mt-6 max-w-4xl mx-auto px-0.5 sm:px-1">
 
-                    <Button
-                        variant="outline"
-                        onClick={back}
-                        className="rounded-full px-5 h-11 font-bold text-gray-600 border-gray-200 hover:bg-gray-50 bg-white shadow-sm w-full sm:w-auto text-xs sm:text-sm"
-                    >
-                        <ArrowLeft className="w-4 h-4 mr-2" />
-
-                        {t('applyBack')}
-                        {step === 1
-                            ? ` ${t('applyHome')}`
-                            : ''}
-                    </Button>
+                    {step > 1 ? (
+                        <Button
+                            variant="outline"
+                            onClick={back}
+                            className="rounded-full px-5 h-11 font-bold text-gray-600 border-gray-200 hover:bg-gray-50 bg-white shadow-sm w-full sm:w-auto text-xs sm:text-sm"
+                        >
+                            <ArrowLeft className="w-4 h-4 mr-2" />
+                            Étape précédente
+                        </Button>
+                    ) : (
+                        <div />
+                    )}
 
                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
 
@@ -3951,7 +3966,7 @@ const Apply = () => {
                                 onClick={save}
                                 className="rounded-full px-4 h-11 font-semibold text-gray-500 hover:bg-white w-full sm:w-auto text-xs sm:text-sm"
                             >
-                                {t('applySaveDraft')}
+                                Enregistrer brouillon
                             </Button>
                         )}
 
@@ -3968,7 +3983,7 @@ const Apply = () => {
                                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                                 ) : null}
 
-                                {t('applyContinue')}
+                                Continuer
 
                                 <ArrowRight className="w-4 h-4 ml-2" />
                             </Button>
@@ -3982,7 +3997,7 @@ const Apply = () => {
                                     disabled={
                                         submitting ||
                                         !termsAccepted ||
-                                        !allRequiredConsentsAccepted
+                                        (!skipRecaptcha && !captchaVerified)
                                     }
                                     className="text-white font-bold rounded-full px-6 h-11 shadow-md shadow-[#0865FE]/30 bg-[#0865FE] hover:bg-blue-700 disabled:opacity-50 transition-all w-full sm:w-auto text-xs sm:text-sm"
                                 >
@@ -3993,15 +4008,15 @@ const Apply = () => {
                                     )}
 
                                     {submitting
-                                        ? t('applyRedirecting')
-                                        : t('applyPayNow')}
+                                        ? 'Redirection...'
+                                        : 'Payer maintenant'}
                                 </Button>
 
                             ) : (
 
                                 <Button
                                     onClick={handlePayAgence}
-                                    disabled={submitting || !selectedOfficeId || !allRequiredConsentsAccepted}
+                                    disabled={submitting}
                                     className="text-white font-bold rounded-full px-6 h-11 shadow-md shadow-[#0865FE]/30 bg-[#0865FE] hover:bg-blue-700 disabled:opacity-50 transition-all w-full sm:w-auto text-xs sm:text-sm"
                                 >
                                     {submitting ? (
@@ -4011,8 +4026,8 @@ const Apply = () => {
                                     )}
 
                                     {submitting
-                                        ? t('applySaving')
-                                        : t('applyConfirmApplication')}
+                                        ? 'Enregistrement...'
+                                        : 'Confirmer la demande'}
                                 </Button>
                             )
                         )}
@@ -4034,21 +4049,14 @@ const Apply = () => {
 
             <style>{`
         .custom-scrollbar::-webkit-scrollbar {
-          width: 5px;
-          height: 5px;
+          display: none !important;
+          width: 0 !important;
+          height: 0 !important;
         }
 
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: transparent;
-        }
-
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: #E2E8F0;
-          border-radius: 10px;
-        }
-
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: #CBD5E1;
+        .custom-scrollbar {
+          scrollbar-width: none !important;
+          -ms-overflow-style: none !important;
         }
 
         .hide-scrollbar::-webkit-scrollbar {

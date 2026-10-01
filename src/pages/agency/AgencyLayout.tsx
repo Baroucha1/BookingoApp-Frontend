@@ -56,7 +56,7 @@ const AgencyLayout = () => {
         }`}
       >
         {/* Branding */}
-        <div className="p-5 pt-[calc(1.25rem+env(safe-area-inset-top,0px))] lg:pt-5 border-b border-sidebar-border flex items-center gap-2.5">
+        <div className="p-5 border-b border-sidebar-border flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-xl bg-gradient-accent flex items-center justify-center shadow-elegant">
             <Plane className="w-5 h-5 text-sidebar-primary-foreground -rotate-45" />
           </div>
@@ -110,7 +110,7 @@ const AgencyLayout = () => {
         </nav>
 
         {/* Profile section */}
-        <div className="p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] lg:pb-3 border-t border-sidebar-border">
+        <div className="p-3 border-t border-sidebar-border">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-sidebar-accent transition-colors text-start">
@@ -147,7 +147,7 @@ const AgencyLayout = () => {
 
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-[calc(4rem+env(safe-area-inset-top,0px))] lg:h-16 pt-safe lg:pt-0 bg-card/80 backdrop-blur border-b flex items-center px-4 md:px-6 gap-3 sticky top-0 z-30">
+        <header className="h-16 bg-card/80 backdrop-blur border-b flex items-center px-4 md:px-6 gap-3 sticky top-0 z-30">
           <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setSidebarOpen(!sidebarOpen)}>
             {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </Button>
@@ -168,7 +168,7 @@ const AgencyLayout = () => {
             </div>
           </div>
         </header>
-        <main className="flex-1 p-4 md:p-6 overflow-auto animate-fade-in-up pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] md:pb-6">
+        <main className="flex-1 p-4 md:p-6 overflow-auto animate-fade-in-up">
           <Outlet />
         </main>
       </div>

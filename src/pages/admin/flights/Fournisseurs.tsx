@@ -264,7 +264,7 @@ export default function Fournisseurs() {
                                                             ? <CheckCircle2 className="w-3.5 h-3.5" />
                                                             : <XCircle className="w-3.5 h-3.5" />}
                                                         {f.lastTestedAt
-                                                            ? new Date(f.lastTestedAt).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+                                                            ? new Date(f.lastTestedAt).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
                                                             : ''}
                                                     </span>
                                                 ) : (

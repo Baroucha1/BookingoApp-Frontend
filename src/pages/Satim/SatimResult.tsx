@@ -1,5 +1,3 @@
-// src/pages/payment/SatimResult.tsx — hotel-specific changes only, rest unchanged
-
 import { useEffect, useRef, useState, useCallback } from 'react';
 import html2pdf from 'html2pdf.js';
 import { useSearchParams, useNavigate } from 'react-router-dom';
@@ -8,17 +6,18 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import confetti from 'canvas-confetti';
+import AppLoading from '@/components/common/AppLoading';
 
 import {
+
     getReceipt,
     confirmSatimPayment,
     confirmFlightSatimPayment,
     type ReceiptData,
 } from '@/service/payment.service';
-import { confirmHotelPayment } from '@/service/hotels/hotels.service';
 
 type Status  = 'PENDING' | 'PAID' | 'FAILED';
-type PayType = 'visa' | 'flight' | 'hotel';
+type PayType = 'visa' | 'flight';
 
 const formatAmount = (amount: number | string) => `${Number(amount).toFixed(2)} DA`;
 
@@ -29,14 +28,15 @@ const SatimResult = () => {
 
     const type          = (searchParams.get('type') ?? 'visa') as PayType;
     const applicationId = searchParams.get('applicationId');
-    const bookingId     = searchParams.get('bookingId'); // flight only now
-    const bookingToken  = searchParams.get('bt');         // hotel only
+    const bookingId     = searchParams.get('bookingId');
+    const mainPage      = type === 'flight' ? '/flights' : '/visa';
+    const mainPageLabel = type === 'flight' ? 'vols' : 'visas';
 
     const [payment,      setPayment]      = useState<any>(null);
-    const [pendingMsg,   setPendingMsg]   = useState<string | null>(null); // hotel pending_verification
     const [receipt,      setReceipt]      = useState<ReceiptData | null>(null);
     const [status,       setStatus]       = useState<Status>('PENDING');
     const [loading,      setLoading]      = useState(true);
+    const [isCancelled,  setIsCancelled]  = useState(false);
     const [error,        setError]        = useState<string | null>(null);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [sendingEmail, setSendingEmail] = useState(false);
@@ -67,61 +67,49 @@ const SatimResult = () => {
     };
 
     useEffect(() => {
-        // hotel has no pre-existing id to check — bookingToken IS the record,
-        // nothing was persisted before this point
-        if (type === 'hotel') {
-            if (!bookingToken) { setError('Jeton de réservation introuvable.'); setLoading(false); return; }
-        } else {
-            const id = type === 'flight' ? bookingId : applicationId;
-            if (!id) { setError('Référence introuvable.'); setLoading(false); return; }
+        // Détecter si l'utilisateur a annulé directement sur la page SATIM
+        const isCancelledQuery =
+            searchParams.get('cancel') === 'true' ||
+            searchParams.get('cancel') === '1' ||
+            searchParams.get('status') === 'cancelled' ||
+            searchParams.get('status') === 'canceled' ||
+            searchParams.get('status') === 'failed' ||
+            searchParams.get('action') === 'cancel' ||
+            searchParams.get('respCode') === '7' ||
+            searchParams.get('errorCode') === '7';
+
+        if (isCancelledQuery) {
+            toast({
+                title: 'Paiement annulé',
+                description: `Paiement SATIM annulé. Redirection vers la page des ${mainPageLabel}...`,
+                variant: 'destructive',
+            });
+            const t = setTimeout(() => {
+                navigate(mainPage, { replace: true });
+            }, 800);
+            return () => clearTimeout(t);
         }
+
+        const id = type === 'flight' ? bookingId : applicationId;
+        if (!id) { setError('Référence introuvable.'); setLoading(false); return; }
+
+        const orderId = searchParams.get('mdOrder') ?? searchParams.get('orderId');
+        if (!orderId) { setError('Référence de commande introuvable.'); setLoading(false); return; }
 
         let cancelled = false;
 
         const confirm = async () => {
             try {
                 if (type === 'visa' && applicationId) {
-                    const orderId = searchParams.get('mdOrder') ?? searchParams.get('orderId');
-                    if (!orderId) { setError('Référence de commande introuvable.'); setLoading(false); return; }
                     const result = await confirmSatimPayment(applicationId, orderId);
                     if (cancelled) return;
                     setPayment(result.payment);
                     await handlePaid(applicationId);
                 } else if (type === 'flight' && bookingId) {
-                    const orderId = searchParams.get('mdOrder') ?? searchParams.get('orderId');
-                    if (!orderId) { setError('Référence de commande introuvable.'); setLoading(false); return; }
                     const result = await confirmFlightSatimPayment(bookingId, orderId);
                     if (cancelled) return;
                     setPayment(result.payment);
                     await handlePaid(bookingId);
-                } else if (type === 'hotel' && bookingToken) {
-                    // orderId was stashed by HotelCheckout right before redirect,
-                    // keyed by this same bookingToken — bt alone isn't enough
-                    // since it doesn't carry orderId inside it
-                    const orderId = sessionStorage.getItem(`hotel_satim_orderId_${bookingToken}`);
-                    if (!orderId) { setError('Référence de commande introuvable.'); setLoading(false); return; }
-
-                    const result = await confirmHotelPayment({ bookingToken, orderId });
-                    if (cancelled) return;
-
-                    sessionStorage.removeItem(`hotel_satim_orderId_${bookingToken}`);
-
-                    if ('bookingId' in result) {
-                        // pending_verification — payment confirmed, Travellanda
-                        // didn't respond in time. Not a failure, not a normal
-                        // success either.
-                        setStatus('PENDING');
-                        setPendingMsg(result.message);
-                        setLoading(false);
-                        return;
-                    }
-
-                    // Normalize confirmHotelSatimPayment's { data: booking } shape
-                    // to match what the JSX below expects: payment.booking.*
-                    setPayment({ ...result.data.payment, booking: result.data });
-                    setStatus('PAID');
-                    setLoading(false);
-                    fireConfetti();
                 }
             } catch (err: any) {
                 if (!cancelled) {
@@ -130,14 +118,39 @@ const SatimResult = () => {
                         setLoading(false);
                         fireConfetti();
                     } else {
+                        const rawErr = String(
+                            err.respCode_desc ||
+                            err.actionCodeDescription ||
+                            err.message ||
+                            ''
+                        );
+                        const isCancelErr =
+                            err.rejectionCase === 'CANCELLED' ||
+                            err.respCode === 7 ||
+                            err.respCode === '7' ||
+                            /annul|cancel|declined|refus/i.test(rawErr);
+
                         setStatus('FAILED');
+                        setIsCancelled(isCancelErr);
                         setLoading(false);
                         setErrorMessage(
-                            err.respCode_desc         ||
-                            err.actionCodeDescription ||
-                            err.message               ||
-                            null
+                            isCancelErr
+                                ? "Le paiement SATIM a été annulé."
+                                : (err.respCode_desc || err.actionCodeDescription || err.message || null)
                         );
+
+                        toast({
+                            title: isCancelErr ? 'Paiement annulé' : 'Paiement échoué',
+                            description: `Redirection vers la page des ${mainPageLabel}...`,
+                            variant: 'destructive',
+                        });
+
+                        // Rediriger automatiquement vers la page d'origine de la requête (vols ou visa)
+                        const redirectTimer = setTimeout(() => {
+                            navigate(mainPage, { replace: true });
+                        }, 2500);
+
+                        return () => clearTimeout(redirectTimer);
                     }
                 }
             }
@@ -145,20 +158,15 @@ const SatimResult = () => {
 
         confirm();
         return () => { cancelled = true; };
-    }, [type, applicationId, bookingId, bookingToken]);
+    }, [type, applicationId, bookingId]);
 
-    const refId = type === 'flight' ? bookingId : type === 'hotel' ? payment?.booking?.yourReference ?? bookingToken : applicationId;
-    const infoLabel = type === 'flight'
-        ? (payment?.booking?.pnr ? `PNR: ${payment.booking.pnr}` : '—')
-        : type === 'hotel'
-            ? (payment?.booking?.bookingReference ? `Réf: ${payment.booking.bookingReference}` : payment?.booking?.hotelName ?? '—')
-            : payment?.visaApplication?.visaType?.nameFr;
-
+    const refId              = type === 'flight' ? bookingId : applicationId;
+    const infoLabel          = type === 'flight'
+        ? payment?.booking?.pnr ? `PNR: ${payment.booking.pnr}` : '—'
+        : payment?.visaApplication?.visaType?.nameFr;
     const successDescription = type === 'flight'
         ? `Vol ${payment?.booking?.departureAirport ?? ''} → ${payment?.booking?.arrivalAirport ?? ''} · PNR: ${payment?.booking?.pnr ?? '—'}`
-        : type === 'hotel'
-            ? `Réservation confirmée — ${payment?.booking?.hotelName ?? ''}`
-            : `Votre demande de visa pour ${payment?.visaApplication?.visaType?.country?.nameFr} a été soumise avec succès.`;
+        : `Votre demande de visa pour ${payment?.visaApplication?.visaType?.country?.nameFr} a été soumise avec succès.`;
 
     // ── Téléchargement PDF ────────────────────────────────────────────────────
     const handleDownload = useCallback(() => {
@@ -175,8 +183,10 @@ const SatimResult = () => {
             .save();
     }, [receipt, refId]);
 
+    // ── Impression ────────────────────────────────────────────────────────────
     const handlePrint = () => window.print();
 
+    // ── Envoi par email ───────────────────────────────────────────────────────
     const handleSendEmail = async () => {
         if (!applicationId) return;
         setSendingEmail(true);
@@ -203,14 +213,12 @@ const SatimResult = () => {
         }
     };
 
+    // ── Loading ───────────────────────────────────────────────────────────────
     if (loading) return (
-        <div className="min-h-screen flex items-center justify-center">
-            <div className="text-center space-y-4">
-                <Loader2 className="w-10 h-10 animate-spin text-primary mx-auto" />
-                <p className="text-muted-foreground text-sm">Confirmation du paiement en cours...</p>
-                <p className="text-muted-foreground text-xs">Cela peut prendre jusqu'à 30 secondes</p>
-            </div>
-        </div>
+        <AppLoading
+            message="Confirmation du paiement en cours..."
+            subMessage="Vérification auprès de SATIM, cela peut prendre quelques instants..."
+        />
     );
 
     if (error) return (
@@ -219,7 +227,7 @@ const SatimResult = () => {
                 <AlertCircle className="w-10 h-10 text-destructive mx-auto" />
                 <p className="font-semibold">Une erreur est survenue</p>
                 <p className="text-muted-foreground text-sm">{error}</p>
-                <Button onClick={() => navigate('/')}>Retour à l'accueil</Button>
+                <Button onClick={() => navigate(mainPage)}>Retour aux {mainPageLabel}</Button>
             </div>
         </div>
     );
@@ -231,6 +239,7 @@ const SatimResult = () => {
 
             <div className="relative max-w-md w-full text-center space-y-6">
 
+                {/* ── Icône statut ── */}
                 {status === 'PAID' && (
                     <CheckCircle2 className="w-16 h-16 text-green-500 mx-auto" strokeWidth={1.5} />
                 )}
@@ -245,27 +254,33 @@ const SatimResult = () => {
                     </div>
                 )}
 
+                {/* ── Titre ── */}
                 <div>
                     <h1 className="text-2xl font-bold">
-                        {status === 'PAID'    && 'Paiement confirmé '}
-                        {status === 'FAILED'  && 'Paiement échoué'}
-                        {status === 'PENDING' && (type === 'hotel' ? 'Paiement confirmé — vérification en cours' : 'Paiement en attente')}
+                        {status === 'PAID'    && 'Paiement confirmé'}
+                        {status === 'FAILED'  && (isCancelled ? 'Paiement annulé' : 'Paiement échoué')}
+                        {status === 'PENDING' && 'Paiement en attente'}
                     </h1>
                     <p className="text-muted-foreground mt-2 text-sm">
                         {status === 'PAID'    && successDescription}
-                        {status === 'FAILED'  && (errorMessage ?? "Votre paiement n'a pas pu être traité. Vous pouvez réessayer.")}
-                        {status === 'PENDING' && (type === 'hotel'
-                            ? (pendingMsg ?? "Votre paiement a été confirmé. Nous vérifions le statut de la réservation auprès de l'hôtel.")
-                            : "Le statut de votre paiement n'a pas encore été mis à jour. Vérifiez dans quelques minutes.")}
+                        {status === 'FAILED'  && (errorMessage ?? (isCancelled ? `Le paiement a été annulé. Redirection vers la page des ${mainPageLabel}...` : "Votre paiement n'a pas pu être traité."))}
+                        {status === 'PENDING' && "Le statut de votre paiement n'a pas encore été mis à jour. Vérifiez dans quelques minutes."}
                     </p>
                 </div>
 
+                {/* ══════════════════════════════════════════════════
+                    REÇU SATIM — visas payés uniquement
+                ══════════════════════════════════════════════════ */}
                 {status === 'PAID' && type === 'visa' && receipt && (
                     <div ref={receiptRef} className="receipt-print bg-white border border-gray-200 rounded-2xl shadow-md overflow-hidden text-left">
+
+                        {/* En-tête */}
                         <div className="px-5 pt-5 pb-3 border-b border-gray-100">
                             <p className="font-bold text-gray-800 text-base">BOOKINGO VISA – Reçu de paiement</p>
                             <p className="text-xs text-gray-400 mt-0.5">Powered by SATIM I-PAY</p>
                         </div>
+
+                        {/* Lignes */}
                         <div className="px-5 py-4 space-y-3">
                             <ReceiptRow label="Identifiant"   value={receipt.satimIdentifiant  || '—'} mono />
                             <ReceiptRow label="N° de commande"      value={receipt.satimOrderNumber  || '—'} mono />
@@ -290,6 +305,8 @@ const SatimResult = () => {
                                 </>
                             )}
                         </div>
+
+                        {/* Numéro vert */}
                         <div className="px-5 pb-4 pt-2 border-t border-gray-100 text-center">
                             <p className="text-xs text-gray-400 inline-flex items-center gap-1 flex-wrap justify-center">
                                 En cas de problème, contactez le numéro vert SATIM :&nbsp;
@@ -302,14 +319,15 @@ const SatimResult = () => {
                     </div>
                 )}
 
-                {payment && status !== 'PENDING' && !(status === 'PAID' && type === 'visa' && receipt) && (
+                {/* ── Carte info paiement (vol ou reçu non chargé) ── */}
+                {payment && !(status === 'PAID' && type === 'visa' && receipt) && (
                     <div className="bg-muted/40 rounded-xl p-5 space-y-3 text-left">
                         <div className="flex justify-between text-sm">
                             <span className="text-muted-foreground">Référence</span>
                             <span className="font-mono font-semibold">{refId?.slice(0, 16).toUpperCase()}</span>
                         </div>
                         <div className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">{type === 'flight' ? 'Vol' : type === 'hotel' ? 'Hôtel' : 'Visa'}</span>
+                            <span className="text-muted-foreground">{type === 'flight' ? 'Vol' : 'Visa'}</span>
                             <span className="font-medium">{infoLabel}</span>
                         </div>
                         <div className="flex justify-between text-sm">
@@ -324,6 +342,7 @@ const SatimResult = () => {
                                         timeZone: 'Africa/Algiers',
                                         day: '2-digit', month: '2-digit', year: 'numeric',
                                         hour: '2-digit', minute: '2-digit',
+                                        hour12: false,
                                     })}
                                 </span>
                             </div>
@@ -341,6 +360,7 @@ const SatimResult = () => {
                     </div>
                 )}
 
+                {/* ── Actions reçu ── */}
                 {status === 'PAID' && type === 'visa' && receipt && (
                     <div className="flex items-center justify-center gap-2 flex-wrap print:hidden">
                         <Button variant="outline" size="sm" onClick={handleDownload} className="rounded-full">
@@ -362,17 +382,7 @@ const SatimResult = () => {
                     </div>
                 )}
 
-                {(status === 'PAID' || status === 'PENDING') && type === 'hotel' && <>
-                    <Button onClick={() => navigate('/hotels/my-bookings')}
-                            className="text-white font-semibold rounded-full px-6"
-                            style={{ background: 'linear-gradient(135deg, #0865FE, #3B2F7E)' }}>
-                        Voir mes réservations
-                    </Button>
-                    <Button variant="outline" onClick={() => navigate('/hotels')} className="rounded-full px-6">
-                        Rechercher un hôtel
-                    </Button>
-                </>}
-
+                {/* ── Numéro vert + message d'erreur (page échec) ── */}
                 {status === 'FAILED' && (
                     <div className="flex flex-col items-center gap-2 text-xs text-muted-foreground">
                         <div className="flex items-center gap-2">
@@ -382,6 +392,7 @@ const SatimResult = () => {
                     </div>
                 )}
 
+                {/* ── Boutons navigation ── */}
                 <div className="flex flex-col sm:flex-row gap-3 justify-center print:hidden">
                     {status === 'PAID' && type === 'visa' && <>
                         <Button onClick={() => navigate('/client/applications')}
@@ -404,18 +415,18 @@ const SatimResult = () => {
                         </Button>
                     </>}
                     {status === 'FAILED' && <>
-                        <Button onClick={() => navigate(type === 'flight' ? '/flights' : type === 'hotel' ? '/hotels' : '/apply')}
+                        <Button onClick={() => navigate(mainPage)}
                                 className="text-white font-semibold rounded-full px-6"
                                 style={{ background: 'linear-gradient(135deg, #0865FE, #3B2F7E)' }}>
-                            Réessayer
+                            {type === 'flight' ? 'Retour aux vols' : 'Retour aux visas'}
                         </Button>
                         <Button variant="outline"
-                                onClick={() => navigate(type === 'flight' ? '/flights/my-bookings' : type === 'hotel' ? '/hotels' : '/client/applications')}
+                                onClick={() => navigate(type === 'flight' ? '/flights/my-bookings' : '/client/applications')}
                                 className="rounded-full px-6">
-                            {type === 'flight' ? 'Mes réservations' : type === 'hotel' ? 'Rechercher un hôtel' : 'Mes demandes'}
+                            {type === 'flight' ? 'Mes réservations' : 'Mes demandes'}
                         </Button>
                     </>}
-                    {status === 'PENDING' && type !== 'hotel' && <>
+                    {status === 'PENDING' && <>
                         <Button onClick={() => navigate(type === 'flight' ? '/flights/my-bookings' : '/client/applications')}
                                 className="text-white font-semibold rounded-full px-6"
                                 style={{ background: 'linear-gradient(135deg, #0865FE, #3B2F7E)' }}>
@@ -432,6 +443,7 @@ const SatimResult = () => {
     );
 };
 
+// ── Sous-composant ligne de reçu ──────────────────────────────────────────────
 const ReceiptRow = ({
                         label, value, mono = false, bold = false, valueStyle,
                     }: {

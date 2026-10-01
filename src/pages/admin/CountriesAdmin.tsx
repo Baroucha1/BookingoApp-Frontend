@@ -290,9 +290,7 @@ const CountriesAdmin = () => {
 
   // ─── Derived ────────────────────────────────────────────────────────────────
 
-  const flagPhoto = (c: Country) =>
-    c.images?.find(i => i.imageType === 'FLAG')?.url ??
-    `https://flagcdn.com/w160/${c.code.toLowerCase()}.png`;
+  const flagPhoto = (c: Country) => c.images?.find(i => i.imageType === 'FLAG')?.url ?? null;
 
   // ─── Render ─────────────────────────────────────────────────────────────────
 

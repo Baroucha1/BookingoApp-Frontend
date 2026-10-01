@@ -62,6 +62,31 @@ const EsimCheckout = () => {
         document.head.appendChild(script);
     }, []);
 
+    // Auto-fill account info if logged in or when token info loads
+    useEffect(() => {
+        const token = localStorage.getItem('token');
+        if (user) {
+            const full = [user.name, user.lastName].filter(Boolean).join(' ');
+            if (full) setName(prev => prev || full);
+            if (user.email) setEmail(prev => prev || user.email);
+            if (user.phone) setPhone(prev => prev || user.phone || '');
+        }
+        if (token) {
+            fetch(`${import.meta.env.VITE_API_URL}/api/auth/me`, {
+                headers: { Authorization: `Bearer ${token}` },
+            })
+                .then(r => r.ok ? r.json() : null)
+                .then(data => {
+                    if (!data) return;
+                    const full = [data.name, data.lastName].filter(Boolean).join(' ');
+                    if (full) setName(prev => prev || full);
+                    if (data.email) setEmail(prev => prev || data.email);
+                    if (data.phone) setPhone(prev => prev || data.phone);
+                })
+                .catch(() => {});
+        }
+    }, [user]);
+
     useEffect(() => {
         if (skipRecaptcha) return;
         const tryRender = () => {
@@ -129,7 +154,12 @@ const EsimCheckout = () => {
     };
 
     return (
-        <div className="min-h-screen pt-16 pb-8 bg-[#ebf3fc] bg-[url('/checkout-bg.webp')] bg-cover bg-center bg-fixed">
+        <div
+            className="min-h-screen pb-8 bg-[#ebf3fc] bg-[url('/checkout-bg.webp')] bg-cover bg-center bg-fixed"
+            style={{
+                paddingTop: 'calc(env(safe-area-inset-top, 0px) + 3.5rem)',
+            }}
+        >
             <div className="max-w-lg mx-auto px-4">
 
                 <button onClick={() => navigate('/esim')} className="flex items-center gap-2 text-gray-700 bg-white/80 backdrop-blur px-3 py-1.5 rounded-full hover:bg-white mb-4 transition-colors shadow-sm text-sm font-medium">

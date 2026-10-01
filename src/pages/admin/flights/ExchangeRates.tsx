@@ -1,6 +1,6 @@
 // src/pages/admin/ExchangeRates.tsx
-import { useState, useEffect, useCallback } from 'react';
-import { Plus, Save, Trash2, Loader2 } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { Plus, Save, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,11 +13,6 @@ import {
 import {
     LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
-import { toast } from 'sonner';
-import {
-    listExchangeRates, createExchangeRate, updateExchangeRate, deleteExchangeRate, getExchangeRateHistory,
-    type ExchangeRateDTO, type ExchangeRateHistoryPoint,
-} from '@/service/admin/exchangeRate.service';
 
 // ── Currencies available for pairing — expand as needed ─────────────────
 const CURRENCIES = [
@@ -26,128 +21,82 @@ const CURRENCIES = [
     { code: 'GBP', label: 'Livre Sterling (GBP)' },
     { code: 'USD', label: 'Dollar US (USD)' },
 ];
+const currencyLabel = (code: string) => CURRENCIES.find(c => c.code === code)?.label ?? code;
 
-const EMPTY_FORM = { from: 'EUR', to: 'DZD', cours: '' };
+interface ExchangeRate {
+    id: number;
+    from: string;
+    to: string;
+    cours: string;
+    updatedAt: string; // display string
+}
 
-const formatDate = (iso: string) =>
-    new Date(iso).toLocaleString('fr-FR', {
-        day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
-    });
+interface HistoryEntry {
+    id: number;
+    user: string;
+    date: string;
+    message: string;
+}
 
-const formatTime = (iso: string) =>
-    new Date(iso).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+// ── Mock seed — matches the reference screenshot's rows ──────────────────
+const initialRates: ExchangeRate[] = [
+    { id: 1, from: 'DZD', to: 'EUR', cours: '0.0068', updatedAt: '04/06/2026 16:38' },
+    { id: 2, from: 'GBP', to: 'DZD', cours: '330',     updatedAt: '12/02/2026 12:41' },
+];
+
+const initialHistory: HistoryEntry[] = [
+    { id: 1, user: 'Youcef Lichani', date: '04/06/2026 16:38', message: 'Modif. Taux de change DZD/EUR : 0.007 au lieu de 0.007 pour Bookingo.Pro #23430' },
+    { id: 2, user: 'Youcef Lichani', date: '04/06/2026 16:38', message: 'Modif. Taux de change DZD/EUR : 0.007 au lieu de 0.007 pour Bookingo.Pro #23430' },
+];
+
+// Mock chart data for the selected pair — replace with real time-series once available
+const mockChartData = [
+    { time: '3 juin 06:00', value: 0 },
+    { time: '3 juin 18:00', value: 0 },
+    { time: '4 juin 06:00', value: 0.0068 },
+    { time: '4 juin 18:00', value: 0 },
+    { time: '5 juin 18:00', value: 0 },
+];
+
+const EMPTY_FORM = { from: 'EUR', to: 'EUR', cours: '' };
 
 export default function ExchangeRates() {
-    const [rates, setRates] = useState<ExchangeRateDTO[]>([]);
-    const [loadingRates, setLoadingRates] = useState(true);
-
-    const [editValues, setEditValues] = useState<Record<string, string>>({});
-    const [savingId, setSavingId] = useState<string | null>(null);
-    const [deletingId, setDeletingId] = useState<string | null>(null);
-
-    // Chart is scoped to one specific pair (an ExchangeRate id), not a bare
-    // currency code — there's no such thing as "history for GBP" alone,
-    // only history for a given pair.
-    const [selectedPairId, setSelectedPairId] = useState<string | null>(null);
-    const [chartData, setChartData] = useState<ExchangeRateHistoryPoint[]>([]);
-    const [loadingChart, setLoadingChart] = useState(false);
+    const [rates, setRates] = useState<ExchangeRate[]>(initialRates);
+    const [history] = useState<HistoryEntry[]>(initialHistory);
+    const [chartCurrency, setChartCurrency] = useState('DZD');
 
     const [dialogOpen, setDialogOpen] = useState(false);
     const [form, setForm] = useState(EMPTY_FORM);
-    const [creating, setCreating] = useState(false);
 
-    const loadRates = useCallback(async () => {
-        setLoadingRates(true);
-        try {
-            const data = await listExchangeRates();
-            setRates(data);
-            setEditValues(Object.fromEntries(data.map((r) => [r.id, r.rate])));
-            // keep current chart selection if it still exists, else default
-            // to the first pair
-            setSelectedPairId((prev) => (prev && data.some((r) => r.id === prev)) ? prev : (data[0]?.id ?? null));
-        } catch (err) {
-            toast.error(err instanceof Error ? err.message : 'Échec du chargement des taux');
-        } finally {
-            setLoadingRates(false);
-        }
-    }, []);
+    const [editValues, setEditValues] = useState<Record<number, string>>(
+        Object.fromEntries(initialRates.map(r => [r.id, r.cours]))
+    );
 
-    useEffect(() => { loadRates(); }, [loadRates]);
-
-    useEffect(() => {
-        if (!selectedPairId) { setChartData([]); return; }
-        let cancelled = false;
-        (async () => {
-            setLoadingChart(true);
-            try {
-                const history = await getExchangeRateHistory(selectedPairId, 30);
-                if (!cancelled) setChartData(history);
-            } catch (err) {
-                if (!cancelled) toast.error(err instanceof Error ? err.message : "Échec du chargement de l'historique");
-            } finally {
-                if (!cancelled) setLoadingChart(false);
-            }
-        })();
-        return () => { cancelled = true; };
-    }, [selectedPairId]);
-
-    const selectedPair = rates.find((r) => r.id === selectedPairId) ?? null;
-
-    const handleFieldChange = (id: string, value: string) => {
+    const handleFieldChange = (id: number, value: string) => {
         setEditValues((prev) => ({ ...prev, [id]: value }));
     };
 
-    const handleSaveRate = async (id: string) => {
-        const value = editValues[id];
-        if (!value?.trim()) return;
-        setSavingId(id);
-        try {
-            const updated = await updateExchangeRate(id, value);
-            setRates((prev) => prev.map((r) => (r.id === id ? updated : r)));
-            if (id === selectedPairId) {
-                // refresh chart since a new history point was just written
-                const history = await getExchangeRateHistory(id, 30);
-                setChartData(history);
-            }
-            toast.success('Taux mis à jour');
-        } catch (err) {
-            toast.error(err instanceof Error ? err.message : 'Échec de la mise à jour');
-        } finally {
-            setSavingId(null);
-        }
+    const handleSaveRate = (id: number) => {
+        // TODO: call PATCH /api/admin/exchange-rates/:id with { cours: editValues[id] }
+        setRates((prev) => prev.map((r) => (r.id === id ? { ...r, cours: editValues[id] } : r)));
     };
 
-    const handleDelete = async (id: string) => {
-        setDeletingId(id);
-        try {
-            await deleteExchangeRate(id);
-            setRates((prev) => prev.filter((r) => r.id !== id));
-            if (id === selectedPairId) setSelectedPairId(null);
-            toast.success('Devise supprimée');
-        } catch (err) {
-            toast.error(err instanceof Error ? err.message : 'Échec de la suppression');
-        } finally {
-            setDeletingId(null);
-        }
+    const handleDelete = (id: number) => {
+        // TODO: call DELETE /api/admin/exchange-rates/:id
+        setRates((prev) => prev.filter((r) => r.id !== id));
     };
 
-    const handleAddDevise = async () => {
+    const handleAddDevise = () => {
         if (!form.cours.trim()) return;
-        if (form.from === form.to) { toast.error('Les devises source et cible doivent être différentes'); return; }
-        setCreating(true);
-        try {
-            const created = await createExchangeRate({ fromCurrency: form.from, toCurrency: form.to, rate: form.cours });
-            setRates((prev) => [...prev, created]);
-            setEditValues((prev) => ({ ...prev, [created.id]: created.rate }));
-            setSelectedPairId(created.id);
-            setForm(EMPTY_FORM);
-            setDialogOpen(false);
-            toast.success('Devise ajoutée');
-        } catch (err) {
-            toast.error(err instanceof Error ? err.message : "Échec de l'ajout");
-        } finally {
-            setCreating(false);
-        }
+        // TODO: call POST /api/admin/exchange-rates
+        const nextId = Math.max(0, ...rates.map(r => r.id)) + 1;
+        const now = new Date().toLocaleString('fr-FR', {
+            day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
+        }).replace(',', '');
+        setRates((prev) => [...prev, { id: nextId, from: form.from, to: form.to, cours: form.cours, updatedAt: now }]);
+        setEditValues((prev) => ({ ...prev, [nextId]: form.cours }));
+        setForm(EMPTY_FORM);
+        setDialogOpen(false);
     };
 
     return (
@@ -160,6 +109,7 @@ export default function ExchangeRates() {
                     <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
                         <div>
                             <h3 className="text-lg font-bold text-slate-800">Taux de change</h3>
+                            <p className="text-sm text-slate-400 mt-0.5">Distributeur principal Bookingo.Pro #23430</p>
                         </div>
                         <Button
                             size="icon"
@@ -181,48 +131,37 @@ export default function ExchangeRates() {
                             </tr>
                             </thead>
                             <tbody>
-                            {loadingRates && (
-                                <tr><td colSpan={4} className="px-6 py-10 text-center text-slate-400">
-                                    <Loader2 className="w-5 h-5 animate-spin inline mr-2" /> Chargement...
-                                </td></tr>
-                            )}
-                            {!loadingRates && rates.map((r) => (
-                                <tr
-                                    key={r.id}
-                                    onClick={() => setSelectedPairId(r.id)}
-                                    className={`border-b border-slate-50 hover:bg-[#DFECFF]/30 transition-colors cursor-pointer ${r.id === selectedPairId ? 'bg-[#DFECFF]/50' : ''}`}
-                                >
-                                    <td className="px-6 py-3 font-medium text-slate-800">{r.fromCurrency} / {r.toCurrency}</td>
-                                    <td className="px-6 py-3" onClick={(e) => e.stopPropagation()}>
+                            {rates.map((r) => (
+                                <tr key={r.id} className="border-b border-slate-50 hover:bg-[#DFECFF]/30 transition-colors">
+                                    <td className="px-6 py-3 font-medium text-slate-800">{r.from} / {r.to}</td>
+                                    <td className="px-6 py-3">
                                         <Input
-                                            value={editValues[r.id] ?? r.rate}
+                                            value={editValues[r.id] ?? r.cours}
                                             onChange={(e) => handleFieldChange(r.id, e.target.value)}
                                             className="w-32 h-9"
                                             inputMode="decimal"
                                         />
                                     </td>
-                                    <td className="px-6 py-3 text-slate-500">{formatDate(r.updatedAt)}</td>
-                                    <td className="px-6 py-3" onClick={(e) => e.stopPropagation()}>
+                                    <td className="px-6 py-3 text-slate-500">{r.updatedAt}</td>
+                                    <td className="px-6 py-3">
                                         <div className="flex items-center gap-2">
                                             <button
                                                 onClick={() => handleSaveRate(r.id)}
-                                                disabled={savingId === r.id}
-                                                className="w-8 h-8 rounded-md bg-emerald-50 text-emerald-600 flex items-center justify-center hover:bg-emerald-500 hover:text-white transition-colors disabled:opacity-50"
+                                                className="w-8 h-8 rounded-md bg-emerald-50 text-emerald-600 flex items-center justify-center hover:bg-emerald-500 hover:text-white transition-colors"
                                             >
-                                                {savingId === r.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                                                <Save className="w-4 h-4" />
                                             </button>
                                             <button
                                                 onClick={() => handleDelete(r.id)}
-                                                disabled={deletingId === r.id}
-                                                className="w-8 h-8 rounded-md bg-red-50 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-colors disabled:opacity-50"
+                                                className="w-8 h-8 rounded-md bg-red-50 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-colors"
                                             >
-                                                {deletingId === r.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                                                <Trash2 className="w-4 h-4" />
                                             </button>
                                         </div>
                                     </td>
                                 </tr>
                             ))}
-                            {!loadingRates && rates.length === 0 && (
+                            {rates.length === 0 && (
                                 <tr>
                                     <td colSpan={4} className="px-6 py-10 text-center text-slate-400">
                                         Aucune devise configurée.
@@ -239,63 +178,52 @@ export default function ExchangeRates() {
                     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="font-bold text-slate-800">Évolution taux de change</h3>
-                            <Select value={selectedPairId ?? undefined} onValueChange={setSelectedPairId}>
-                                <SelectTrigger className="w-32 h-9"><SelectValue placeholder="Paire" /></SelectTrigger>
+                            <Select value={chartCurrency} onValueChange={setChartCurrency}>
+                                <SelectTrigger className="w-28 h-9"><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                    {rates.map((r) => (
-                                        <SelectItem key={r.id} value={r.id}>{r.fromCurrency}/{r.toCurrency}</SelectItem>
+                                    {CURRENCIES.map((c) => (
+                                        <SelectItem key={c.code} value={c.code}>{c.code}</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
                         </div>
 
-                        <p className="text-xs text-slate-400 mb-2">
-                            {selectedPair ? `${selectedPair.fromCurrency} / ${selectedPair.toCurrency}` : 'Sélectionnez une paire'}
-                        </p>
+                        <p className="text-xs text-slate-400 mb-2">Taux de change</p>
                         <div className="h-56">
-                            {loadingChart ? (
-                                <div className="h-full flex items-center justify-center text-slate-400">
-                                    <Loader2 className="w-5 h-5 animate-spin" />
-                                </div>
-                            ) : chartData.length === 0 ? (
-                                <div className="h-full flex items-center justify-center text-slate-400 text-sm">
-                                    Aucun historique disponible.
-                                </div>
-                            ) : (
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <LineChart
-                                        data={chartData.map((p) => ({ time: formatTime(p.recordedAt), value: Number(p.rate) }))}
-                                        margin={{ top: 5, right: 10, left: -20, bottom: 0 }}
-                                    >
-                                        <CartesianGrid strokeDasharray="3 3" stroke="#EEF3FB" />
-                                        <XAxis dataKey="time" tick={{ fontSize: 10, fill: '#94A3B8' }} />
-                                        <YAxis tick={{ fontSize: 10, fill: '#94A3B8' }} />
-                                        <Tooltip />
-                                        <Line
-                                            type="monotone" dataKey="value"
-                                            name={selectedPair ? `${selectedPair.fromCurrency}/${selectedPair.toCurrency}` : 'Taux'}
-                                            stroke="#1775FF" strokeWidth={2} dot={{ r: 3 }}
-                                        />
-                                    </LineChart>
-                                </ResponsiveContainer>
-                            )}
+                            <ResponsiveContainer width="100%" height="100%">
+                                <LineChart data={mockChartData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#EEF3FB" />
+                                    <XAxis dataKey="time" tick={{ fontSize: 10, fill: '#94A3B8' }} />
+                                    <YAxis tick={{ fontSize: 10, fill: '#94A3B8' }} domain={[-1, 2]} />
+                                    <Tooltip />
+                                    <Line type="monotone" dataKey="value" name={`${chartCurrency}/EUR`} stroke="#1775FF" strokeWidth={2} dot={{ r: 3 }} />
+                                </LineChart>
+                            </ResponsiveContainer>
                         </div>
                     </div>
 
                     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-                        <h3 className="font-bold text-slate-800">Historique des valeurs</h3>
-                        <p className="text-xs text-slate-400 mb-4">
-                            {selectedPair ? `${selectedPair.fromCurrency} / ${selectedPair.toCurrency} — dernières valeurs` : 'Sélectionnez une paire'}
-                        </p>
+                        <h3 className="font-bold text-slate-800">Historique des modifications</h3>
+                        <p className="text-xs text-slate-400 mb-4">Les 5 dernières</p>
 
-                        <div className="space-y-3">
-                            {[...chartData].reverse().slice(0, 5).map((h) => (
-                                <div key={h.id} className="flex items-center justify-between text-sm border-b border-slate-50 pb-2 last:border-0">
-                                    <span className="text-slate-500">{formatDate(h.recordedAt)}</span>
-                                    <span className="font-semibold text-slate-800">{h.rate}</span>
+                        <div className="space-y-4">
+                            {history.map((h, i) => (
+                                <div key={h.id} className="flex gap-3">
+                                    <div className="flex flex-col items-center">
+                                        <div className="w-9 h-9 rounded-full bg-emerald-500 flex items-center justify-center text-white text-xs font-semibold shrink-0">
+                                            {h.user.split(' ').map(w => w[0]).join('').slice(0, 2)}
+                                        </div>
+                                        {i < history.length - 1 && <div className="w-px flex-1 bg-slate-200 mt-1" />}
+                                    </div>
+                                    <div className="pb-4">
+                                        <p className="text-sm font-semibold text-slate-800">
+                                            {h.user} <span className="text-slate-400 font-normal text-xs">{h.date}</span>
+                                        </p>
+                                        <p className="text-sm text-slate-600 mt-0.5">{h.message}</p>
+                                    </div>
                                 </div>
                             ))}
-                            {chartData.length === 0 && (
+                            {history.length === 0 && (
                                 <p className="text-sm text-slate-400">Aucune modification récente.</p>
                             )}
                         </div>
@@ -311,6 +239,8 @@ export default function ExchangeRates() {
                     </DialogHeader>
 
                     <div className="space-y-4 py-2">
+                        <p className="text-sm font-semibold text-slate-700">Distributeur principal Bookingo.Pro #23430</p>
+
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                             <div className="space-y-1.5">
                                 <Label className="text-xs text-slate-500">Du</Label>
@@ -353,9 +283,9 @@ export default function ExchangeRates() {
                         <Button
                             className="bg-[#1775FF] hover:bg-[#1775FF]/90 text-white"
                             onClick={handleAddDevise}
-                            disabled={!form.cours.trim() || creating}
+                            disabled={!form.cours.trim()}
                         >
-                            {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Ajouter'}
+                            Ajouter
                         </Button>
                     </DialogFooter>
                 </DialogContent>

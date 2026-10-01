@@ -25,36 +25,42 @@ function Stepper({ label, value, min = 0, onChange }: { label: string; value: nu
   );
 }
 
-export default function PassengerClassSelector({ qteADT, qteCHD, qteINF, classe, onChange }: Props) {
+export default function PassengerClassSelector({ qteADT, qteCHD, qteINF, classe, onChange, trigger }: Props) {
   const { t } = useLanguage();
-  const classes: { v: 'Y' | 'C' | 'F' | 'W'; label: string }[] = [
-    { v: 'Y', label: t('flightClassEconomy') },
-    { v: 'W', label: t('flightClassPremium') },
-    { v: 'C', label: t('flightClassBusiness') },
-    { v: 'F', label: t('flightClassFirst') },
-  ];
   const totalPax = qteADT + qteCHD + qteINF;
-  const classeLabel = classes.find((c) => c.v === classe)?.label;
+
+  const classesConfig: { v: 'Y' | 'C' | 'F' | 'W'; label: string }[] = [
+    { v: 'Y', label: t('economy') },
+    { v: 'W', label: t('premium') },
+    { v: 'C', label: t('businessClass') || t('business') },
+    { v: 'F', label: t('first') },
+  ];
+
+  const classeLabel = classesConfig.find((c) => c.v === classe)?.label || classe;
 
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button
-            type="button"
-            className="w-full h-12 md:h-14 px-4 rounded bg-white border border-[#0454E8] text-[#1A202C] text-left flex items-center gap-2 hover:bg-[#F8F9FA] transition"
-        >
-          <Users className="w-4 h-4 text-[#F5A623]" />
-          <span className="text-sm text-[#0454E8]">{totalPax} {t(totalPax === 1 ? 'flightPassenger' : 'flightPassengers')} · {classeLabel}</span>
-        </button>
+        {trigger ? (
+          trigger
+        ) : (
+          <button
+              type="button"
+              className="w-full h-12 md:h-14 px-4 rounded bg-white border border-[#0454E8] text-[#1A202C] text-left rtl:text-right flex items-center gap-2 hover:bg-[#F8F9FA] transition"
+          >
+            <Users className="w-4 h-4 text-[#F5A623]" />
+            <span className="text-sm text-[#0454E8]">{totalPax} {totalPax > 1 ? t('passengersPlural') : t('passengers')} · {classeLabel}</span>
+          </button>
+        )}
       </PopoverTrigger>
       <PopoverContent className="w-80 p-4">
-        <Stepper label={t('flightAdults')} value={qteADT} min={1} onChange={(n) => onChange({ qteADT: n, qteCHD, qteINF, classe })} />
-        <Stepper label={t('flightChildren')} value={qteCHD} onChange={(n) => onChange({ qteADT, qteCHD: n, qteINF, classe })} />
-        <Stepper label={t('flightInfants')} value={qteINF} onChange={(n) => onChange({ qteADT, qteCHD, qteINF: n, classe })} />
+        <Stepper label={t('adultsLabel')} value={qteADT} min={1} onChange={(n) => onChange({ qteADT: n, qteCHD, qteINF, classe })} />
+        <Stepper label={t('childrenLabel')} value={qteCHD} onChange={(n) => onChange({ qteADT, qteCHD: n, qteINF, classe })} />
+        <Stepper label={t('infantsLabel')} value={qteINF} onChange={(n) => onChange({ qteADT, qteCHD, qteINF: n, classe })} />
         <div className="mt-3 pt-3 border-t">
-          <div className="text-xs text-muted-foreground mb-2">{t('flightCabinClass')}</div>
+          <div className="text-xs text-muted-foreground mb-2">{t('cabinClassLabel')}</div>
           <div className="grid grid-cols-2 gap-2">
-            {classes.map((c) => (
+            {classesConfig.map((c) => (
               <Button
                 key={c.v}
                 type="button"

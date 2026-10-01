@@ -12,7 +12,6 @@ export type ApplicationInput = {
     numberOfPeople?: number;
     clientId?:      string | null;
     agencyId?:      string | null;
-    officeId?:      string | null;
     passengers:     PassengerWithDocuments[];
 };
 
