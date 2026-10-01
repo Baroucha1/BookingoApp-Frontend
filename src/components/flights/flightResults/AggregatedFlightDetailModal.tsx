@@ -313,7 +313,7 @@ export default function AggregatedFlightDetailModal({ open, onOpenChange, group,
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="w-screen h-[100dvh] max-w-none rounded-none sm:w-full sm:h-auto sm:max-w-4xl sm:max-h-[92vh] sm:rounded-3xl bg-slate-900/60 backdrop-blur-md p-0 overflow-hidden border-0 shadow-2xl flex flex-col gap-0 [&>button]:hidden">
+            <DialogContent className="fixed inset-0 top-0 left-0 translate-x-0 translate-y-0 w-full h-[100dvh] max-w-none max-h-none rounded-none sm:top-[50%] sm:left-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:w-full sm:h-auto sm:max-w-4xl sm:max-h-[92vh] sm:rounded-3xl bg-white p-0 overflow-hidden border-0 shadow-2xl flex flex-col gap-0 [&>button]:hidden">
                 <DialogTitle className="sr-only">Détails du vol</DialogTitle>
                 <DialogDescription className="sr-only">Détails et options de réservation du vol</DialogDescription>
                 

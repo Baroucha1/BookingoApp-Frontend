@@ -5,7 +5,7 @@ export async function bookFlight(
     fareSourceCode: string,
     passengers: PassengerInput[],
     totalPrice: number,
-    paymentMethod?: 'agence' | 'delivery',
+    paymentMethod?: 'agence' | 'delivery' | 'satim',
     officeId?: string,
     deliveryDetails?: { address: string; wilaya: string; city: string; phone: string },
 ): Promise<BookFlightResult> {
@@ -19,16 +19,30 @@ export async function bookFlight(
         let message = `Booking failed: ${res.status}`;
         try {
             const data = await res.json();
-            if (data?.message) message = data.message;
+            console.error('[bookFlight] Server error payload:', data);
+            if (typeof data === 'string') {
+                message = data;
+            } else if (data && typeof data === 'object') {
+                if (data.error) message = typeof data.error === 'string' ? data.error : JSON.stringify(data.error);
+                else if (data.message) message = typeof data.message === 'string' ? data.message : JSON.stringify(data.message);
+                else if (data.errorMessage) message = typeof data.errorMessage === 'string' ? data.errorMessage : JSON.stringify(data.errorMessage);
+                else if (data.details) message = typeof data.details === 'string' ? data.details : JSON.stringify(data.details);
+                else if (Array.isArray(data.errors)) message = data.errors.join(', ');
+            }
         } catch {
             try {
                 const text = await res.text();
-                if (text) message = text;
+                if (text) {
+                    console.error('[bookFlight] Server error text:', text);
+                    message = text;
+                }
             } catch { }
         }
         console.error('Booking error:', res.status, message);
         if (res.status === 401) {
             message = "Connexion requise ou session expirée. Veuillez vous connecter pour finaliser la réservation.";
+        } else if (res.status === 410) {
+            message = "Cette offre de vol a expiré ou n'est plus disponible. Veuillez relancer une recherche.";
         }
         const error = new Error(message) as any;
         error.status = res.status;
@@ -103,12 +117,22 @@ export async function orderReserve(bookingId: string): Promise<OrderReserveResul
         let message = `Order reserve failed: ${res.status}`;
         try {
             const data = await res.json();
-            if (data?.message) message = data.message;
-            else if (data?.error) message = data.error;
+            console.error('[orderReserve] Server error payload:', data);
+            if (typeof data === 'string') {
+                message = data;
+            } else if (data && typeof data === 'object') {
+                if (data.error) message = typeof data.error === 'string' ? data.error : JSON.stringify(data.error);
+                else if (data.message) message = typeof data.message === 'string' ? data.message : JSON.stringify(data.message);
+                else if (data.errorMessage) message = typeof data.errorMessage === 'string' ? data.errorMessage : JSON.stringify(data.errorMessage);
+                else if (data.details) message = typeof data.details === 'string' ? data.details : JSON.stringify(data.details);
+            }
         } catch {
             try {
                 const text = await res.text();
-                if (text) message = text;
+                if (text) {
+                    console.error('[orderReserve] Server error text:', text);
+                    message = text;
+                }
             } catch { }
         }
         console.error('Order reserve error:', res.status, message);

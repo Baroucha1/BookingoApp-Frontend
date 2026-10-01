@@ -322,7 +322,7 @@ export default function AggregatedFlightBooking() {
                 }
             }
 
-            const result = await bookFlight(offer.fareSourceCode!, toBookingPassengers(passengers), offer.price);
+            const result = await bookFlight(offer.fareSourceCode!, toBookingPassengers(passengers), offer.price, 'satim');
 
             const resolvedData = (result as any)?.data && typeof (result as any).data === 'object'
                 ? { ...(result as any).data, ...result }

@@ -20,6 +20,7 @@ import ResetPasswordForm from "@/pages/client/ResetPasswordForm";
 import NotFound from "./pages/NotFound";
 import ScrollToTop from "@/components/ScrollToTop";
 import MobileBackButtonHandler from "@/components/MobileBackButtonHandler";
+import KeyboardManager from "@/components/common/KeyboardManager";
 import AdminLayout from "./pages/admin/AdminLayout";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import VisaTypesAdmin from "./pages/admin/VisaTypesAdmin";
@@ -224,6 +225,7 @@ const Application = () => (
               <NativeReadyNotifier />
               <ScrollToTop />
               <MobileBackButtonHandler />
+              <KeyboardManager />
               <RouteTopLoader />
               <Routes>
 

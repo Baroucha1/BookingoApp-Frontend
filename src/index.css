@@ -578,12 +578,14 @@ body.keyboard-visible [data-bottom-navbar] {
   pointer-events: none !important;
 }
 
-/* Prevent iOS Safari / WKWebView auto-zoom when focusing inputs, selects, and textareas */
+/* Prevent iOS Safari / WKWebView auto-zoom and keep inputs well above keyboard when focused */
 @media screen and (max-width: 768px) {
   input:not([type="checkbox"]):not([type="radio"]),
   select,
   textarea {
     font-size: 16px !important;
+    scroll-margin-bottom: 140px;
+    scroll-margin-top: 80px;
   }
 }
 
@@ -617,11 +619,6 @@ body.keyboard-visible [data-bottom-navbar] {
 
 .bookingo-circle-spinner {
   animation: spin 0.9s linear infinite, bookingoBorderColor 2.2s ease-in-out infinite;
-}
-
-/* Global iOS Safe Area enforcements for Dialogs, Sheets & Modals */
-[data-radix-dialog-content]:not([data-full-bleed]) {
-  max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 2rem);
 }
 
 .modal-safe-top {
