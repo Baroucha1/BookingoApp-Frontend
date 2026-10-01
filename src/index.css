@@ -584,8 +584,8 @@ body.keyboard-visible [data-bottom-navbar] {
   select,
   textarea {
     font-size: 16px !important;
-    scroll-margin-bottom: 140px;
-    scroll-margin-top: 80px;
+    scroll-margin-bottom: 80px;
+    scroll-margin-top: 16px;
   }
 }
 
@@ -627,4 +627,17 @@ body.keyboard-visible [data-bottom-navbar] {
 
 .modal-safe-bottom {
   padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+}
+
+/* Toast and notification safe area positioning */
+[data-radix-toast-viewport] {
+  padding-top: calc(env(safe-area-inset-top, 0px) + 16px) !important;
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 16px) !important;
+  padding-left: calc(env(safe-area-inset-left, 0px) + 16px) !important;
+  padding-right: calc(env(safe-area-inset-right, 0px) + 16px) !important;
+}
+
+[data-sonner-toaster] {
+  --top-offset: calc(env(safe-area-inset-top, 0px) + 16px) !important;
+  --bottom-offset: calc(env(safe-area-inset-bottom, 0px) + 16px) !important;
 }

@@ -18,7 +18,7 @@ export default function KeyboardManager() {
             }
         }
 
-        // Helper to smoothly scroll focused input into clear visible center
+        // Helper to gently ensure the active input is visible above the keyboard without jumping to the top
         const scrollToActiveElement = () => {
             const el = document.activeElement as HTMLElement | null;
             if (!el) return;
@@ -28,19 +28,26 @@ export default function KeyboardManager() {
                 el.tagName === 'SELECT' ||
                 el.isContentEditable;
 
-            if (isField) {
-                // Short timeout to allow virtual keyboard to finish its opening animation
-                setTimeout(() => {
-                    try {
-                        el.scrollIntoView({
-                            behavior: 'smooth',
-                            block: 'center',
-                            inline: 'nearest',
-                        });
-                    } catch {
-                        el.scrollIntoView();
-                    }
-                }, 160);
+            if (!isField) return;
+
+            // Check if element is already comfortably visible
+            const rect = el.getBoundingClientRect();
+            const visibleHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+
+            // If the element is already completely in view, do nothing (prevents unwanted jumps)
+            if (rect.top >= 60 && rect.bottom <= visibleHeight - 20) {
+                return;
+            }
+
+            // Only scroll if actually occluded by the keyboard or top bar
+            try {
+                el.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'nearest',
+                    inline: 'nearest',
+                });
+            } catch {
+                el.scrollIntoView();
             }
         };
 
@@ -56,9 +63,8 @@ export default function KeyboardManager() {
 
             if (isField) {
                 setIsKeyboardOpen(true);
-                scrollToActiveElement();
-                // Second pass to ensure correct position after keyboard transitions
-                setTimeout(scrollToActiveElement, 320);
+                // Wait for the keyboard animation to finish before checking visibility
+                setTimeout(scrollToActiveElement, 250);
             }
         };
 
@@ -89,7 +95,6 @@ export default function KeyboardManager() {
                 if (info?.keyboardHeight) {
                     setBottomOffset(Math.max(12, info.keyboardHeight + 10));
                 }
-                scrollToActiveElement();
             }).then((h) => handles.push(h)).catch(() => {});
 
             Keyboard.addListener('keyboardDidShow', (info) => {
@@ -111,7 +116,7 @@ export default function KeyboardManager() {
             }).then((h) => handles.push(h)).catch(() => {});
         }
 
-        // 4. Visual Viewport handling for Android / Mobile Web
+        // 4. Visual Viewport handling for Android / Mobile Web (resize only, never scroll)
         const handleVisualViewportChange = () => {
             if (!window.visualViewport) return;
             const diff = window.innerHeight - window.visualViewport.height;
@@ -127,7 +132,6 @@ export default function KeyboardManager() {
 
         if (window.visualViewport) {
             window.visualViewport.addEventListener('resize', handleVisualViewportChange);
-            window.visualViewport.addEventListener('scroll', handleVisualViewportChange);
         }
 
         return () => {
@@ -136,7 +140,6 @@ export default function KeyboardManager() {
             handles.forEach((h) => h.remove());
             if (window.visualViewport) {
                 window.visualViewport.removeEventListener('resize', handleVisualViewportChange);
-                window.visualViewport.removeEventListener('scroll', handleVisualViewportChange);
             }
         };
     }, []);
