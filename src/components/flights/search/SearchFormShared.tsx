@@ -9,12 +9,17 @@ import {
     Clock,
     Loader2,
     MapPin,
+    Search,
+    X,
+    Plane,
 } from "lucide-react";
 import { getAirlineLogo, getAirlineName } from "@/service/flights/airlines.ts";
 import { createPortal } from 'react-dom';
 import { ArrowLeft } from 'lucide-react';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { toast } from '@/hooks/use-toast';
+import { Capacitor } from '@capacitor/core';
+import { hapticSelection } from "@/lib/haptics.ts";
 import {
     toLocalISO, today, addMonths, buildMonthDays,
     emptyLeg, defaultForm, RECENT_KEY, getRecentAirports, saveRecentAirport,
@@ -29,6 +34,7 @@ export interface AirportInputProps {
     placeholder: string;
     selectedAirport?: Airport | null;
     onShowAllDestinations?: () => void;
+    label?: string;
 }
 
 export interface TileProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -74,7 +80,366 @@ export const Tile = forwardRef<HTMLDivElement, TileProps>(({ icon, label, childr
 });
 Tile.displayName = 'Tile';
 
-export function AirportInput({ value, onChange, placeholder, selectedAirport, onShowAllDestinations }: AirportInputProps) {
+export function useIsMobile(breakpoint = 768) {
+    const [isMobile, setIsMobile] = useState(false);
+    useEffect(() => {
+        const mq = window.matchMedia(`(max-width: ${breakpoint - 1}px)`);
+        const update = () => setIsMobile(mq.matches);
+        update();
+        mq.addEventListener('change', update);
+        return () => mq.removeEventListener('change', update);
+    }, [breakpoint]);
+    return isMobile;
+}
+
+function AirportListItem({
+    airport,
+    isRecent,
+    onSelect,
+}: {
+    airport: Airport;
+    isRecent?: boolean;
+    onSelect: (airport: Airport) => void;
+}) {
+    return (
+        <button
+            type="button"
+            onClick={() => onSelect(airport)}
+            className="w-full px-3.5 py-3 rounded-2xl flex items-center justify-between gap-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800/70 active:bg-blue-50/80 dark:active:bg-blue-950/40 transition-colors border-b border-slate-100/80 dark:border-slate-800/60 last:border-b-0"
+        >
+            <div className="flex items-center gap-3 min-w-0">
+                <div
+                    className={cn(
+                        "w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-xs",
+                        isRecent
+                            ? "bg-blue-50 dark:bg-blue-950/70 text-[#0454E8] dark:text-blue-400 border border-blue-100 dark:border-blue-900/60"
+                            : "bg-amber-50 dark:bg-amber-950/70 text-[#FFAA01] dark:text-amber-400 border border-amber-100 dark:border-amber-900/60"
+                    )}
+                >
+                    {isRecent ? <Clock className="w-5 h-5" /> : <Plane className="w-5 h-5" />}
+                </div>
+                <div className="min-w-0 flex-1">
+                    <div className="font-bold text-slate-900 dark:text-white text-sm leading-tight truncate">
+                        {airport.city} <span className="font-normal text-xs text-slate-400">· {airport.country}</span>
+                    </div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                        {airport.name}
+                    </div>
+                </div>
+            </div>
+            <div className="shrink-0 flex items-center gap-2">
+                <span className="px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-[#0454E8] dark:text-blue-400 font-bold text-xs tracking-wider border border-slate-200/80 dark:border-slate-700">
+                    {airport.code}
+                </span>
+            </div>
+        </button>
+    );
+}
+
+export function MobileAirportSheet({
+    title,
+    initialValue = '',
+    onSelect,
+    onClose,
+    onShowAllDestinations,
+}: {
+    title: string;
+    initialValue?: string;
+    onSelect: (airport: Airport) => void;
+    onClose: () => void;
+    onShowAllDestinations?: () => void;
+}) {
+    const [searchTerm, setSearchTerm] = useState(initialValue);
+    const [remoteSuggestions, setRemoteSuggestions] = useState<Airport[]>([]);
+    const [loading, setLoading] = useState(false);
+    const inputRef = useRef<HTMLInputElement>(null);
+    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Auto-focus input on mount so native keyboard opens immediately beneath the search bar
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            inputRef.current?.focus();
+        }, 80);
+        return () => clearTimeout(timer);
+    }, []);
+
+    const fetchRemoteAirports = useCallback(async (kw: string) => {
+        if (kw.length < 2) {
+            setRemoteSuggestions([]);
+            return;
+        }
+        setLoading(true);
+        try {
+            let results = await searchAirports(kw);
+            if (!results.length) results = searchAirportsFallback(kw);
+            setRemoteSuggestions(results);
+        } catch {
+            setRemoteSuggestions(searchAirportsFallback(kw));
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    const handleSearchChange = (val: string) => {
+        setSearchTerm(val);
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        if (val.trim().length >= 2) {
+            debounceRef.current = setTimeout(() => {
+                fetchRemoteAirports(val.trim());
+            }, 250);
+        } else {
+            setRemoteSuggestions([]);
+            setLoading(false);
+        }
+    };
+
+    const handlePick = (airport: Airport) => {
+        hapticSelection();
+        saveRecentAirport(airport);
+        onSelect(airport);
+        onClose();
+    };
+
+    const recents = getRecentAirports();
+    const q = searchTerm.trim().toLowerCase();
+
+    // Pool of base airports: fallbacks + recents + remote suggestions
+    const combinedPool = Array.from(
+        new Map(
+            [...recents, ...FALLBACK_AIRPORTS, ...remoteSuggestions].map((a) => [a.code, a])
+        ).values()
+    );
+
+    // Real-time filtering when user is typing
+    const filteredAirports = q.length === 0
+        ? []
+        : combinedPool.filter((a) => {
+            return (
+                a.code.toLowerCase().includes(q) ||
+                a.city.toLowerCase().includes(q) ||
+                a.name.toLowerCase().includes(q) ||
+                a.country.toLowerCase().includes(q)
+            );
+        }).sort((a, b) => {
+            const aCode = a.code.toLowerCase();
+            const bCode = b.code.toLowerCase();
+            const aCity = a.city.toLowerCase();
+            const bCity = b.city.toLowerCase();
+
+            // 1. Exact IATA code match first
+            if (aCode === q && bCode !== q) return -1;
+            if (bCode === q && aCode !== q) return 1;
+
+            // 2. City starts with query
+            const aCityStarts = aCity.startsWith(q);
+            const bCityStarts = bCity.startsWith(q);
+            if (aCityStarts && !bCityStarts) return -1;
+            if (!aCityStarts && bCityStarts) return 1;
+
+            // 3. Code starts with query
+            const aCodeStarts = aCode.startsWith(q);
+            const bCodeStarts = bCode.startsWith(q);
+            if (aCodeStarts && !bCodeStarts) return -1;
+            if (!aCodeStarts && bCodeStarts) return 1;
+
+            return a.city.localeCompare(b.city);
+        });
+
+    const algerianAirports = FALLBACK_AIRPORTS.filter((a) => a.country === 'Algérie');
+    const internationalAirports = FALLBACK_AIRPORTS.filter((a) => a.country !== 'Algérie');
+
+    return createPortal(
+        <div
+            className="fixed inset-0 z-[9999] bg-white dark:bg-slate-900 flex flex-col"
+            style={{
+                paddingTop: 'env(safe-area-inset-top, 0px)',
+            }}
+        >
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800 shrink-0 bg-white dark:bg-slate-900">
+                <div className="flex items-center gap-3">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        aria-label="Fermer"
+                        className="w-9 h-9 -ml-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 active:bg-slate-200 dark:active:bg-slate-700 flex items-center justify-center text-slate-800 dark:text-slate-100 shrink-0 transition"
+                    >
+                        <ArrowLeft className="w-5 h-5" />
+                    </button>
+                    <div>
+                        <div className="text-base font-bold text-slate-900 dark:text-white leading-tight">
+                            {title}
+                        </div>
+                        <div className="text-[11px] text-slate-400">
+                            Recherchez par ville, aéroport ou code IATA
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Sticky Search Input Bar - Keyboard pops right below */}
+            <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 shrink-0 bg-white dark:bg-slate-900">
+                <div className="relative flex items-center bg-slate-100 dark:bg-slate-800 rounded-2xl px-3.5 py-2.5 focus-within:ring-2 focus-within:ring-[#1775FF] focus-within:bg-white dark:focus-within:bg-slate-800 border border-transparent focus-within:border-[#1775FF] transition-all">
+                    <Search className="w-4 h-4 text-[#1775FF] shrink-0 mr-2.5" />
+                    <input
+                        ref={inputRef}
+                        type="text"
+                        value={searchTerm}
+                        onChange={(e) => handleSearchChange(e.target.value)}
+                        placeholder="Ex: Alger, ALG, Paris, CDG, Oran..."
+                        className="w-full bg-transparent border-none outline-none text-slate-900 dark:text-white placeholder:text-slate-400 text-base font-medium"
+                        autoCapitalize="words"
+                        autoComplete="off"
+                        autoCorrect="off"
+                        spellCheck="false"
+                    />
+                    {loading && (
+                        <Loader2 className="w-4 h-4 text-[#FFAA01] animate-spin shrink-0 ml-2" />
+                    )}
+                    {searchTerm && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                handleSearchChange('');
+                                inputRef.current?.focus();
+                            }}
+                            className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 flex items-center justify-center text-slate-500 hover:text-slate-800 dark:text-slate-300 shrink-0 ml-2 transition"
+                        >
+                            <X className="w-3.5 h-3.5" />
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            {/* Scrollable list - keyboard stays underneath the input while this area scrolls cleanly */}
+            <div
+                className="flex-1 overflow-y-auto px-4 py-2 space-y-4"
+                style={{
+                    paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 2rem)',
+                }}
+            >
+                {q.length > 0 ? (
+                    <div>
+                        <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-2 mb-2">
+                            Résultats ({filteredAirports.length})
+                        </div>
+                        {filteredAirports.length > 0 ? (
+                            <div className="space-y-1">
+                                {filteredAirports.map((airport) => (
+                                    <AirportListItem
+                                        key={airport.code}
+                                        airport={airport}
+                                        onSelect={handlePick}
+                                    />
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-center py-12 px-4">
+                                <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400">
+                                    <MapPin className="w-6 h-6" />
+                                </div>
+                                <div className="font-semibold text-slate-800 dark:text-slate-200 text-sm mb-1">
+                                    Aucun aéroport trouvé pour « {searchTerm} »
+                                </div>
+                                <div className="text-xs text-slate-400 max-w-xs mx-auto">
+                                    Essayez le nom de la ville ou le code à 3 lettres (ex: Alger, ALG, Paris, ORN).
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                ) : (
+                    <>
+                        {/* Recents */}
+                        {recents.length > 0 && (
+                            <div>
+                                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-2 mb-2 flex items-center gap-1.5">
+                                    <Clock className="w-3.5 h-3.5 text-[#1775FF]" />
+                                    <span>Recherches récentes</span>
+                                </div>
+                                <div className="space-y-1">
+                                    {recents.map((airport) => (
+                                        <AirportListItem
+                                            key={`recent-${airport.code}`}
+                                            airport={airport}
+                                            isRecent
+                                            onSelect={handlePick}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* All Destinations shortcut */}
+                        {onShowAllDestinations && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    onClose();
+                                    onShowAllDestinations();
+                                }}
+                                className="w-full p-3.5 rounded-2xl bg-gradient-to-r from-blue-500/10 to-indigo-500/10 border border-blue-200/60 dark:border-blue-800/40 flex items-center justify-between text-left active:scale-[0.99] transition"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <span className="text-xl">🌐</span>
+                                    <div>
+                                        <div className="font-bold text-sm text-[#0454E8] dark:text-blue-400">
+                                            Voir toutes les destinations
+                                        </div>
+                                        <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                                            Explorer la carte et la liste complète des vols
+                                        </div>
+                                    </div>
+                                </div>
+                                <ArrowLeft className="w-4 h-4 text-[#0454E8] rotate-180" />
+                            </button>
+                        )}
+
+                        {/* Domestic / Algerian */}
+                        <div>
+                            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-2 mb-2 flex items-center gap-1.5">
+                                <span>🇩🇿</span>
+                                <span>Aéroports en Algérie</span>
+                            </div>
+                            <div className="space-y-1">
+                                {algerianAirports.map((airport) => (
+                                    <AirportListItem
+                                        key={airport.code}
+                                        airport={airport}
+                                        onSelect={handlePick}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Popular International */}
+                        <div>
+                            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-2 mb-2 flex items-center gap-1.5">
+                                <span>✈️</span>
+                                <span>Destinations populaires</span>
+                            </div>
+                            <div className="space-y-1">
+                                {internationalAirports.map((airport) => (
+                                    <AirportListItem
+                                        key={airport.code}
+                                        airport={airport}
+                                        onSelect={handlePick}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                    </>
+                )}
+            </div>
+        </div>,
+        document.body
+    );
+}
+
+export function AirportInput({ value, onChange, placeholder, selectedAirport, onShowAllDestinations, label }: AirportInputProps) {
+    const isMobile = useIsMobile();
+    const isMobileDevice = isMobile || Capacitor.isNativePlatform();
+    const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
+
     const [query, setQuery] = useState(value);
     const [suggestions, setSuggestions] = useState<Airport[]>([]);
     const [loading, setLoading] = useState(false);
@@ -95,6 +460,7 @@ export function AirportInput({ value, onChange, placeholder, selectedAirport, on
     useEffect(() => { setQuery(value); }, [value]);
 
     useEffect(() => {
+        if (isMobileDevice) return;
         const handler = (e: MouseEvent | TouchEvent) => {
             if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
         };
@@ -104,7 +470,7 @@ export function AirportInput({ value, onChange, placeholder, selectedAirport, on
             document.removeEventListener('mousedown', handler);
             document.removeEventListener('touchstart', handler);
         };
-    }, []);
+    }, [isMobileDevice]);
 
     const fetchAirports = useCallback(async (kw: string) => {
         if (kw.length < 2) { setSuggestions([]); setOpen(false); return; }
@@ -149,12 +515,44 @@ export function AirportInput({ value, onChange, placeholder, selectedAirport, on
     return (
         <div ref={wrapRef} className="relative">
             {selectedAirport ? (
-                <button type="button" onClick={() => { onChange('', undefined); setQuery(''); }} className="w-full text-left block min-w-0">
-                    <div className="font-bold text-[#0454E8] text-sm leading-tight truncate">
-                        {selectedAirport.city} <span className="text-[#F5A623]">{selectedAirport.code}</span>
+                <div
+                    onClick={() => {
+                        if (isMobileDevice) {
+                            setMobileSheetOpen(true);
+                        } else {
+                            onChange('', undefined);
+                            setQuery('');
+                        }
+                    }}
+                    className="w-full text-left block min-w-0 cursor-pointer group"
+                >
+                    <div className="font-bold text-[#0454E8] text-sm leading-tight truncate flex items-center justify-between">
+                        <span>
+                            {selectedAirport.city} <span className="text-[#F5A623]">{selectedAirport.code}</span>
+                        </span>
+                        <span
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onChange('', undefined);
+                                setQuery('');
+                            }}
+                            className="opacity-40 hover:opacity-100 p-0.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition"
+                            title="Effacer"
+                        >
+                            <X className="w-3.5 h-3.5 text-slate-400" />
+                        </span>
                     </div>
                     <div className="text-[11px] text-[#64748B] truncate">{selectedAirport.name}</div>
-                </button>
+                </div>
+            ) : isMobileDevice ? (
+                <div
+                    onClick={() => setMobileSheetOpen(true)}
+                    className="w-full text-left cursor-pointer py-0.5 select-none"
+                >
+                    <div className="text-slate-400 text-sm font-medium truncate">
+                        {value || ROUTE_HINTS[hintIdx]}
+                    </div>
+                </div>
             ) : (
                 <div className="relative">
                     <input
@@ -167,7 +565,9 @@ export function AirportInput({ value, onChange, placeholder, selectedAirport, on
                     {loading && <Loader2 className="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-4 text-[#F5A623] animate-spin" />}
                 </div>
             )}
-            {open && (
+
+            {/* Desktop dropdown */}
+            {!isMobileDevice && open && (
                 <div className="absolute z-50 left-0 w-full min-w-[280px] mt-3 bg-white border border-[#E2E8F0] rounded-2xl shadow-2xl max-h-72 overflow-y-auto">
                     {suggestions.map((a) => (
                         <button key={a.code} type="button"
@@ -198,20 +598,22 @@ export function AirportInput({ value, onChange, placeholder, selectedAirport, on
                     )}
                 </div>
             )}
+
+            {/* Mobile Full-Screen Sheet */}
+            {isMobileDevice && mobileSheetOpen && (
+                <MobileAirportSheet
+                    title={label || placeholder || "Sélectionnez un aéroport"}
+                    initialValue=""
+                    onSelect={(airport) => {
+                        handleSelect(airport);
+                        setMobileSheetOpen(false);
+                    }}
+                    onClose={() => setMobileSheetOpen(false)}
+                    onShowAllDestinations={onShowAllDestinations}
+                />
+            )}
         </div>
     );
-}
-
-export function useIsMobile(breakpoint = 768) {
-    const [isMobile, setIsMobile] = useState(false);
-    useEffect(() => {
-        const mq = window.matchMedia(`(max-width: ${breakpoint - 1}px)`);
-        const update = () => setIsMobile(mq.matches);
-        update();
-        mq.addEventListener('change', update);
-        return () => mq.removeEventListener('change', update);
-    }, [breakpoint]);
-    return isMobile;
 }
 
 function DayCell({ date, state, onPick }: { date: Date; state: DayState; onPick: (d: Date) => void }) {

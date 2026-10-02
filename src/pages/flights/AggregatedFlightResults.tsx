@@ -226,8 +226,13 @@ export default function AggregatedFlightResults() {
 
     function handleContinue(offer: DisplayOffer) {
         setModalOpen(false);
-        sessionStorage.setItem('pendingFlightBooking', JSON.stringify({ offer, searchParams: lastSearchParams }));
-        navigate('/flights/booking', { state: { offer, searchParams: lastSearchParams } });
+        const payload = {
+            offer,
+            searchParams: lastSearchParams,
+            returnTo: { pathname: location.pathname, search: location.search },
+        };
+        sessionStorage.setItem('pendingFlightBooking', JSON.stringify(payload));
+        navigate('/flights/booking', { state: payload });
     }
 
     return (

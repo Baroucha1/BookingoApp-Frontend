@@ -11,6 +11,7 @@ import {
     confirmEsimSatimPayment,
     type EsimOrder,
 } from '@/service/payment.service';
+import { redirectToApp } from '@/lib/satimRedirect';
 
 type Status = 'PENDING' | 'PAID' | 'FAILED' | 'PAID_FULFILLMENT_ERROR';
 
@@ -60,7 +61,7 @@ const EsimSatimResult = () => {
                 variant: 'destructive',
             });
             const t = setTimeout(() => {
-                navigate('/esim', { replace: true });
+                redirectToApp(navigate, '/esim', { replace: true });
             }, 800);
             return () => clearTimeout(t);
         }
@@ -126,7 +127,7 @@ const EsimSatimResult = () => {
                 });
 
                 const redirectTimer = setTimeout(() => {
-                    navigate('/esim', { replace: true });
+                    redirectToApp(navigate, '/esim', { replace: true });
                 }, 2500);
 
                 return () => clearTimeout(redirectTimer);
@@ -150,7 +151,7 @@ const EsimSatimResult = () => {
                 <AlertCircle className="w-10 h-10 text-destructive mx-auto" />
                 <p className="font-semibold">Une erreur est survenue</p>
                 <p className="text-muted-foreground text-sm">{error}</p>
-                <Button onClick={() => navigate('/esim')}>Retour aux offres eSIM</Button>
+                <Button onClick={() => redirectToApp(navigate, '/esim')}>Retour aux offres eSIM</Button>
             </div>
         </div>
     );
@@ -257,27 +258,27 @@ const EsimSatimResult = () => {
                 {/* ── Boutons navigation ── */}
                 <div className="flex flex-col sm:flex-row gap-3 justify-center print:hidden">
                     {(status === 'PAID' || status === 'PAID_FULFILLMENT_ERROR') && <>
-                        <Button onClick={() => navigate('/esim/my-orders')}
+                        <Button onClick={() => redirectToApp(navigate, '/esim/my-orders')}
                                 className="text-white font-semibold rounded-full px-6"
                                 style={{ background: 'linear-gradient(135deg, #0865FE, #3B2F7E)' }}>
                             Voir mes eSIMs
                         </Button>
-                        <Button variant="outline" onClick={() => navigate('/esim')} className="rounded-full px-6">
+                        <Button variant="outline" onClick={() => redirectToApp(navigate, '/esim')} className="rounded-full px-6">
                             Accueil eSIM
                         </Button>
                     </>}
                     {status === 'FAILED' && <>
-                        <Button onClick={() => navigate('/esim')}
+                        <Button onClick={() => redirectToApp(navigate, '/esim')}
                                 className="text-white font-semibold rounded-full px-6"
                                 style={{ background: 'linear-gradient(135deg, #0865FE, #3B2F7E)' }}>
                             Retour aux forfaits eSIM
                         </Button>
-                        <Button variant="outline" onClick={() => navigate('/esim/my-orders')} className="rounded-full px-6">
+                        <Button variant="outline" onClick={() => redirectToApp(navigate, '/esim/my-orders')} className="rounded-full px-6">
                             Mes eSIMs
                         </Button>
                     </>}
                     {status === 'PENDING' && <>
-                        <Button onClick={() => navigate('/esim/my-orders')}
+                        <Button onClick={() => redirectToApp(navigate, '/esim/my-orders')}
                                 className="text-white font-semibold rounded-full px-6"
                                 style={{ background: 'linear-gradient(135deg, #0865FE, #3B2F7E)' }}>
                             Mes eSIMs

@@ -7,6 +7,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { initiateSatimPayment } from '@/service/payment.service';
+import { setAppSession } from '@/lib/satimRedirect';
 import AppLoading from '@/components/common/AppLoading';
 
 declare global { interface Window { grecaptcha: any; } }
@@ -112,6 +113,7 @@ const PayApplication = () => {
                 throw new Error("Identifiant de la demande introuvable.");
             }
             const { formUrl } = await initiateSatimPayment(applicationId, captchaToken);
+            setAppSession();
             window.location.href = formUrl;
         } catch (err: any) {
             const rawMsg = err?.message ?? '';

@@ -16,8 +16,8 @@ import {
     emptyLeg, defaultForm, RECENT_KEY, getRecentAirports, saveRecentAirport,
     getDayState,
 } from '../search/SearchFormUtils.ts';
-import type {  DayState } from '../search/SearchFormUtils.ts';
-import { AirportInputProps } from "@/components/flights/search/SearchFormShared.tsx";
+import { AirportInputProps, MobileAirportSheet, useIsMobile } from "@/components/flights/search/SearchFormShared.tsx";
+import { Capacitor } from '@capacitor/core';
 import { useToast } from '@/hooks/use-toast.ts';
 import { useLanguage } from '@/i18n/LanguageContext.tsx';
 
@@ -181,8 +181,12 @@ function InlineField({ label, children, className, onClick, required, error }: {
 }
 
 const AirportInput = forwardRef<AirportInputHandle, AirportInputProps>(function AirportInput(
-    { value, onChange, placeholder, selectedAirport, onShowAllDestinations }, ref
+    { value, onChange, placeholder, selectedAirport, onShowAllDestinations, label }, ref
 ) {
+    const isMobile = useIsMobile();
+    const isMobileDevice = isMobile || Capacitor.isNativePlatform();
+    const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
+
     const [query, setQuery] = useState(value);
     const [suggestions, setSuggestions] = useState<Airport[]>([]);
     const [loading, setLoading] = useState(false);
@@ -192,18 +196,25 @@ const AirportInput = forwardRef<AirportInputHandle, AirportInputProps>(function 
     const inputRef = useRef<HTMLInputElement>(null);
 
     useImperativeHandle(ref, () => ({
-        focus: () => inputRef.current?.focus(),
+        focus: () => {
+            if (isMobileDevice) {
+                setMobileSheetOpen(true);
+            } else {
+                inputRef.current?.focus();
+            }
+        },
     }));
 
     useEffect(() => { setQuery(value); }, [value]);
 
     useEffect(() => {
+        if (isMobileDevice) return;
         const handler = (e: MouseEvent) => {
             if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
         };
         document.addEventListener('mousedown', handler);
         return () => document.removeEventListener('mousedown', handler);
-    }, []);
+    }, [isMobileDevice]);
 
     const fetchAirports = useCallback(async (kw: string) => {
         if (kw.length < 2) { setSuggestions([]); setOpen(false); return; }
@@ -248,12 +259,44 @@ const AirportInput = forwardRef<AirportInputHandle, AirportInputProps>(function 
     return (
         <div ref={wrapRef} className="relative">
             {selectedAirport ? (
-                <button type="button" onClick={() => { onChange('', undefined); setQuery(''); }} className="text-left block w-full min-w-0">
-                    <div className="font-bold text-[#0454E8] text-sm leading-tight truncate">
-                        {selectedAirport.city} <span className="text-[#94A3B8] font-normal">({selectedAirport.code})</span>
+                <div
+                    onClick={() => {
+                        if (isMobileDevice) {
+                            setMobileSheetOpen(true);
+                        } else {
+                            onChange('', undefined);
+                            setQuery('');
+                        }
+                    }}
+                    className="text-left block w-full min-w-0 cursor-pointer group"
+                >
+                    <div className="font-bold text-[#0454E8] text-sm leading-tight truncate flex items-center justify-between">
+                        <span>
+                            {selectedAirport.city} <span className="text-[#94A3B8] font-normal">({selectedAirport.code})</span>
+                        </span>
+                        <span
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onChange('', undefined);
+                                setQuery('');
+                            }}
+                            className="opacity-40 hover:opacity-100 p-0.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition"
+                            title="Effacer"
+                        >
+                            <X className="w-3.5 h-3.5 text-slate-400" />
+                        </span>
                     </div>
                     <div className="text-[11px] text-[#64748B] truncate">{selectedAirport.name.split(' ').slice(0, 1)[0] ?? selectedAirport.country}</div>
-                </button>
+                </div>
+            ) : isMobileDevice ? (
+                <div
+                    onClick={() => setMobileSheetOpen(true)}
+                    className="w-full text-left cursor-pointer py-0.5 select-none"
+                >
+                    <div className="text-slate-400 text-sm font-semibold truncate">
+                        {value || placeholder}
+                    </div>
+                </div>
             ) : (
                 <div className="relative">
                     <input
@@ -267,7 +310,8 @@ const AirportInput = forwardRef<AirportInputHandle, AirportInputProps>(function 
                     {loading && <Loader2 className="absolute right-0 top-0 w-3.5 h-3.5 text-[#F5A623] animate-spin" />}
                 </div>
             )}
-            {open && (
+
+            {!isMobileDevice && open && (
                 <div className="absolute z-50 left-0 w-[280px] mt-2 bg-white border border-[#E2E8F0] rounded-2xl shadow-2xl max-h-72 overflow-y-auto">
                     {suggestions.map((a) => (
                         <button key={a.code} type="button"
@@ -296,6 +340,19 @@ const AirportInput = forwardRef<AirportInputHandle, AirportInputProps>(function 
                         </button>
                     )}
                 </div>
+            )}
+
+            {isMobileDevice && mobileSheetOpen && (
+                <MobileAirportSheet
+                    title={label || placeholder || "Sélectionnez un aéroport"}
+                    initialValue=""
+                    onSelect={(airport) => {
+                        handleSelect(airport);
+                        setMobileSheetOpen(false);
+                    }}
+                    onClose={() => setMobileSheetOpen(false)}
+                    onShowAllDestinations={onShowAllDestinations}
+                />
             )}
         </div>
     );
@@ -878,6 +935,7 @@ export default function AggregatedSearchForm({ onSubmit, loading, initialParams 
                                         error={attemptedSubmit && (legOriginMissing ? t.originRequired : legSameAirport ? t.sameAirportError : undefined)}
                                     >
                                         <AirportInput
+                                            label={`${t.from} ${i + 1}`}
                                             value={leg.origin}
                                             selectedAirport={leg.originAirport ?? null}
                                             onChange={(code, a) => updateLeg(i, { origin: code, originAirport: a ?? null })}
@@ -894,6 +952,7 @@ export default function AggregatedSearchForm({ onSubmit, loading, initialParams 
                                         error={attemptedSubmit && (legDestMissing ? t.destRequired : legSameAirport ? t.sameAirportError : undefined)}
                                     >
                                         <AirportInput
+                                            label={`${t.to} ${i + 1}`}
                                             value={leg.destination}
                                             selectedAirport={leg.destinationAirport ?? null}
                                             onChange={(code, a) => updateLeg(i, { destination: code, destinationAirport: a ?? null })}
@@ -979,6 +1038,7 @@ export default function AggregatedSearchForm({ onSubmit, loading, initialParams 
                                 error={attemptedSubmit && (originMissing ? t.originRequired : sameAirport ? t.sameAirportError : undefined)}
                             >
                                 <AirportInput
+                                    label={t.from}
                                     value={p.departVol1}
                                     selectedAirport={depAirport}
                                     onChange={(code, a) => {
@@ -1005,6 +1065,7 @@ export default function AggregatedSearchForm({ onSubmit, loading, initialParams 
                                 error={attemptedSubmit && (destMissing ? t.destRequired : sameAirport ? t.sameAirportError : undefined)}
                             >
                                 <AirportInput
+                                    label={t.to}
                                     ref={destInputRef}
                                     value={p.destinationVol1}
                                     selectedAirport={destAirport}

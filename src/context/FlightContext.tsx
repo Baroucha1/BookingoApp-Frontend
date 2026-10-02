@@ -15,6 +15,8 @@ export interface PassengerFormData {
     nationality: string;
     mail?: string;
     tel?: string;
+    fidelityAirline?: string;
+    fidelityNumber?: string;
 }
 
 

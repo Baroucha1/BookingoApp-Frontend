@@ -237,10 +237,10 @@ const AdminLayout = () => {
           <div className={cn(HEADER_HEIGHT, 'px-5 flex items-center bg-[#1775FF] shrink-0')}>
             <Link to="/" className="flex items-center">
               <img
-                  src="/bookingo-logo.png"
+                  src="/chart/LOGO_BOOKINGO.png"
                   alt="BookinGO"
                   style={{ width: '130px', height: 'auto' }}
-                  className="brightness-0 invert"
+                  className="brightness-0 invert object-contain"
               />
             </Link>
           </div>

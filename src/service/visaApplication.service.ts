@@ -23,21 +23,31 @@ export type PassengerWithDocuments = PassengerInput & {
  * Create a full visa application with passengers and documents.
  */
 export const createFullApplication = async (data: ApplicationInput) => {
-    const token = localStorage.getItem('token'); // add this
+    const token = localStorage.getItem('token');
 
     const response = await fetch(`${API_URL}/api/applications`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}), // add this
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify(data),
     });
 
     if (!response.ok) {
-        const error = await response.json();
-        console.error('POST /api/applications failed:', response.status, error); // temporary debug
-        throw new Error(error.message ?? 'Failed to create application');
+        let errorMsg = `Échec de l'envoi de la demande (${response.status})`;
+        try {
+            const error = await response.json();
+            console.error('POST /api/applications failed:', response.status, error);
+            if (error?.message) {
+                errorMsg = error.message;
+            } else if (error?.error) {
+                errorMsg = error.error;
+            }
+        } catch {
+            // ignore
+        }
+        throw new Error(errorMsg);
     }
 
     return response.json();

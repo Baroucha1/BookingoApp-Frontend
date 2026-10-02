@@ -1,8 +1,10 @@
 // src/components/flights/PassengerForm.tsx
 import { useState, useEffect } from 'react';
-import { ChevronDown, CheckCircle2, XCircle, Upload, FileText, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { ChevronDown, CheckCircle2, XCircle, Upload, FileText, X, ScanLine } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { PassengerFormData } from '@/context/FlightContext';
+import { useLanguage } from '@/i18n/LanguageContext';
 import SmartDateField from '@/components/flights/SmartDateField';
 
 
@@ -14,6 +16,7 @@ interface Props {
     showContactFields?: boolean;
     errors?: Record<string, string>;
     onChange: (data: PassengerFormData) => void;
+    onScanPassport?: () => void;
     requiresPassportUpload?: boolean;
     passportFile?: File | null;
     onPassportFileChange?: (file: File | null) => void;
@@ -89,10 +92,12 @@ function LiveField({ label, name, value, onChange, errors, isValid, placeholder,
 
 export default function PassengerForm({
                                           index, data, travelDate, showContactFields, errors = {}, onChange,
+                                          onScanPassport,
                                           requiresPassportUpload, passportFile, onPassportFileChange,
                                           requireDocument,
                                       }: Props) {
     const [open, setOpen] = useState(index === 0);
+    const { t } = useLanguage();
 
     const u = (patch: Partial<PassengerFormData>) => onChange({ ...data, ...patch });
 
@@ -134,6 +139,14 @@ export default function PassengerForm({
 
             {open && (
                 <div className="p-4 pt-2 grid grid-cols-1 md:grid-cols-2 gap-3 border-t border-blue-100">
+                    {onScanPassport && (
+                        <div className="md:col-span-2">
+                            <Button type="button" variant="outline" size="sm" onClick={onScanPassport} className="gap-2">
+                                <ScanLine className="h-4 w-4" />
+                                {t('applyScanPassport')}
+                            </Button>
+                        </div>
+                    )}
                     <Field label="Titre" name="passengerTitle" errors={errors}>
                         <select
                             value={data.passengerTitle}

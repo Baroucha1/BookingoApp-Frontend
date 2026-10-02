@@ -25,7 +25,20 @@ export interface DisplayLeg {
     isDirect: boolean;
     stopsLabel: string;
     checkedBaggage: string | null;
+    cabinBaggage: string | null;
     segments: NormalizedSegment[];
+}
+
+export interface BagOption {
+    optionId: string;
+    quantity: number;
+    weight: number | null;
+    weightUnit: string | null;
+    price: number;
+    currency: string | null;
+    bookableByItinerary: boolean;
+    segmentIds: string[];
+    travelerIds: string[];
 }
 
 export interface DisplayOffer {
@@ -62,6 +75,9 @@ export interface DisplayOffer {
     includedCheckedBagsOnly: boolean | null;
     chargeableFirstBagPrice: { amount: number; currency: string } | null; // NEW
     fareSourceCode: string | null;
+    bagOptions: BagOption[];
+    bagsTotal: number;
+    cabinBaggage: string | null;
 }
 
 export interface GroupedOffer {
@@ -125,6 +141,7 @@ export function normalizeAggregatedOffer(offer: NormalizedOffer): DisplayOffer {
                 stopsLabel: legIsDirect ? 'Direct' : `${leg.segments.length - 1} escale${leg.segments.length > 2 ? 's' : ''}`,
                 segments: leg.segments,
                 checkedBaggage: leg.baggage?.checked ?? null,
+                cabinBaggage: leg.baggage?.cabin ?? null,
                 _sortKey: new Date(legFirst.departure.dateTime).getTime(),
             };
         })
@@ -164,6 +181,9 @@ export function normalizeAggregatedOffer(offer: NormalizedOffer): DisplayOffer {
         includedCheckedBagsOnly: offer.includedCheckedBagsOnly ?? null,
         chargeableFirstBagPrice: offer.baggage?.chargeableFirstBagPrice ?? null,
         fareSourceCode: offer.fareSourceCode,
+        bagOptions: offer.bagOptions ?? [],
+        bagsTotal: offer.bagsTotal ?? 0,
+        cabinBaggage: offer.baggage?.cabin ?? null,
         legs,
     };
 }

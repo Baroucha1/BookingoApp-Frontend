@@ -138,17 +138,16 @@ const Footer = () => {
 
             {/* Brand */}
             <div className="col-span-2 md:col-span-1">
-            <span className="font-extrabold text-3xl tracking-tight select-none">
-              <span className="text-[#0865FE]">Bookin</span>
-              <span style={{ color: '#F5A623' }}>GO</span>
-            </span>
+              <Link to="/" className="inline-block active:scale-95 transition-transform" aria-label="BookinGO">
+                <img
+                  src="/chart/LOGO_SLOGAN_BOOKINGO.png"
+                  alt="BookinGO - Book Easy. Go Anywhere !"
+                  className="h-12 sm:h-14 w-auto object-contain select-none"
+                />
+              </Link>
 
-              <p className="text-gray-900 text-sm font-bold mt-3">
-                Voyagez, explorez, vivez plus
-              </p>
-
-              <p className="text-sm mt-2 leading-relaxed max-w-xs text-gray-500">
-                {t('footerDesc') || "Votre plateforme de confiance pour l'obtention de visas electroniques."}
+              <p className="text-sm mt-3 leading-relaxed max-w-xs text-gray-500">
+                {t('footerDesc') || "Votre plateforme de confiance pour l'obtention de visas électroniques, billets d'avion et séjours."}
               </p>
             </div>
 

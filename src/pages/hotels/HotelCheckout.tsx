@@ -17,6 +17,7 @@ import {
 } from '@/service/hotels/hotels.service';
 import { nightsBetween } from '@/lib/hotelSearchParams';
 import { useLanguage } from '@/i18n/LanguageContext';
+import { setAppSession } from '@/lib/satimRedirect';
 
 interface CheckoutState {
     hotelName: string;
@@ -209,7 +210,7 @@ export default function HotelCheckout() {
             // SatimResult can send it back alongside bt on confirm.
             sessionStorage.setItem(`hotel_satim_orderId_${payment.bookingToken}`, payment.orderId);
             sessionStorage.setItem('hotel_satim_last_token', payment.bookingToken);
-
+            setAppSession();
             window.location.href = payment.formUrl;
         } catch (err) {
             toast.error(err instanceof Error ? err.message : t('hotelBookingFailed'));

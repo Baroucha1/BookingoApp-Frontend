@@ -61,6 +61,22 @@ export async function repriceFlight(fareSourceCode: string): Promise<NormalizedO
     return res.json();
 }
 
+export interface BagSelection {
+    travelerId: string;
+    optionId: string;
+}
+
+export async function priceFlightWithBags(fareSourceCode: string, selections: BagSelection[]) {
+    const res = await fetch(`${import.meta.env.VITE_API_URL ?? ''}/api/Flights/price-with-bags`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fareSourceCode, selections }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error ?? 'Impossible de calculer le prix avec bagages.');
+    return data as { price: number; currency: string; bagsTotal: number };
+}
+
 export interface NearbyDatePrice {
     date: string;      // "YYYY-MM-DD"
     price: number;

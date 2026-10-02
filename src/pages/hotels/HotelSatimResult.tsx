@@ -10,6 +10,7 @@ import {
     type ConfirmHotelPaymentResult,
     type PendingVerification,
 } from '@/service/hotels/hotels.service';
+import { redirectToApp } from '@/lib/satimRedirect';
 
 export default function HotelSatimResult() {
     const { t } = useLanguage();
@@ -65,7 +66,7 @@ export default function HotelSatimResult() {
                         <XCircle className="w-12 h-12 text-red-500 mx-auto" />
                         <div className="font-bold text-red-600 text-lg">{t('hotelPaymentFailed')}</div>
                         <p className="text-sm text-slate-500">{error}</p>
-                        <Button onClick={() => navigate('/hotels')} className="mt-4 bg-[#1775FF] hover:bg-[#1775FF]/90 text-white cursor-pointer">
+                        <Button onClick={() => redirectToApp(navigate, '/hotels')} className="mt-4 bg-[#1775FF] hover:bg-[#1775FF]/90 text-white cursor-pointer">
                             {t('hotelReturnToHotels')}
                         </Button>
                     </>
@@ -78,7 +79,7 @@ export default function HotelSatimResult() {
                                 <Clock className="w-12 h-12 text-amber-500 mx-auto" />
                                 <div className="font-bold text-amber-600 text-lg">{t('hotelPaymentPending')}</div>
                                 <p className="text-sm text-slate-600">{result.message}</p>
-                                <Button onClick={() => navigate('/hotels')} className="mt-4 bg-[#1775FF] hover:bg-[#1775FF]/90 text-white cursor-pointer">
+                                <Button onClick={() => redirectToApp(navigate, '/hotels')} className="mt-4 bg-[#1775FF] hover:bg-[#1775FF]/90 text-white cursor-pointer">
                                     {t('hotelReturnToHotels')}
                                 </Button>
                             </>
@@ -90,7 +91,7 @@ export default function HotelSatimResult() {
                                     <div>{result.satimDetails.amount} {result.satimDetails.currency}</div>
                                     <div className="text-xs font-mono text-slate-400">{t('hotelPaymentRef')}: {result.satimDetails.orderNumber}</div>
                                 </div>
-                                <Button onClick={() => navigate('/hotels')} className="mt-4 bg-[#1775FF] hover:bg-[#1775FF]/90 text-white cursor-pointer">
+                                <Button onClick={() => redirectToApp(navigate, '/hotels')} className="mt-4 bg-[#1775FF] hover:bg-[#1775FF]/90 text-white cursor-pointer">
                                     {t('hotelReturnToHotels')}
                                 </Button>
                             </>

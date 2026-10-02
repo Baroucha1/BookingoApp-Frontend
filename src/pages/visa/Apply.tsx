@@ -1235,6 +1235,7 @@ import { uploadFile } from '@/service/upload.service';
 import { createFullApplication } from '@/service/visaApplication.service';
 import type { VisaType, VisaTypeDocumentRequirement, PassengerInput } from '@/lib/types';
 import { initiateSatimPayment } from '@/service/payment.service.ts';
+import { setAppSession } from '@/lib/satimRedirect';
 
 const formatAmount = (amount: number) => `${amount.toFixed(2)} DA`;
 
@@ -1324,6 +1325,9 @@ const Apply = () => {
     useEffect(() => {
         const token = localStorage.getItem('token');
         if (user) {
+            if ((user as any).profile?.id) {
+                setClientProfileId((user as any).profile.id);
+            }
             if (user.email) setEmail(prev => prev || user.email);
             if (user.phone) setPhone(prev => prev || user.phone || '');
             setPassengers(prev => {
@@ -1347,6 +1351,9 @@ const Apply = () => {
                 .then(r => r.ok ? r.json() : null)
                 .then(data => {
                     if (!data) return;
+                    if (data.profile?.id) {
+                        setClientProfileId(data.profile.id);
+                    }
                     if (data.email) setEmail(prev => prev || data.email);
                     if (data.phone) setPhone(prev => prev || data.phone);
                     setPassengers(prev => {
@@ -1364,9 +1371,16 @@ const Apply = () => {
                         return updated;
                     });
                 })
-                .catch(() => {});
+                .catch(() => { });
         }
     }, [user]);
+
+    // Auto-confirm contact info when email, phone, and startDate are filled
+    useEffect(() => {
+        if (email && phone && startDate && !infoConfirmed) {
+            setInfoConfirmed(true);
+        }
+    }, [email, phone, startDate]);
 
     const popularDestinationsRef = useRef<HTMLDivElement>(null);
 
@@ -1618,7 +1632,9 @@ const Apply = () => {
         paxId: string,
         reqId: string
     ) => {
-        if (!user) {
+        const token = localStorage.getItem('token');
+        if (!user && !token) {
+            save();
             toast({
                 title: 'Connexion requise',
                 description:
@@ -1744,7 +1760,6 @@ const Apply = () => {
 
             case 2:
                 return (
-                    infoConfirmed &&
                     !!email &&
                     !!phone &&
                     !!startDate &&
@@ -1767,6 +1782,8 @@ const Apply = () => {
 
     const submitApplication = async (): Promise<{
         applicationId: string;
+        id?: string;
+        data?: any;
     }> => {
         const uploadedDocs: Record<
             string,
@@ -1782,15 +1799,54 @@ const Apply = () => {
         for (const pax of passengers) {
             uploadedDocs[pax.id] = {};
 
-            for (const [reqId, file] of Object.entries(
+            for (const [reqId, fileItem] of Object.entries(
                 files[pax.id] ?? {}
             )) {
-                const fileUrl = await uploadFile(file);
+                if (!fileItem) continue;
 
-                uploadedDocs[pax.id][reqId] = {
-                    fileUrl,
-                    originalName: file.name,
-                };
+                let fileUrl = '';
+                let originalName = 'document.pdf';
+
+                if (typeof fileItem === 'string') {
+                    fileUrl = fileItem;
+                    originalName = fileItem.split('/').pop() || 'document.pdf';
+                } else if (fileItem instanceof File || fileItem instanceof Blob) {
+                    originalName = (fileItem as File).name || 'document.pdf';
+                    fileUrl = await uploadFile(fileItem as File);
+                } else if (typeof fileItem === 'object') {
+                    fileUrl = (fileItem as any).fileUrl || (fileItem as any).url || '';
+                    originalName = (fileItem as any).originalName || (fileItem as any).name || 'document.pdf';
+                    if (!fileUrl && (fileItem as any).file) {
+                        fileUrl = await uploadFile((fileItem as any).file);
+                    }
+                }
+
+                if (fileUrl) {
+                    uploadedDocs[pax.id][reqId] = {
+                        fileUrl,
+                        originalName: originalName || 'document.pdf',
+                    };
+                }
+            }
+        }
+
+        // Only pass genuine client profile ID, never raw User ID (to prevent foreign key violations)
+        let effectiveClientId = clientProfileId || (user as any)?.profile?.id || null;
+        const token = localStorage.getItem('token');
+        if (!effectiveClientId && token) {
+            try {
+                const meRes = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/me`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+                if (meRes.ok) {
+                    const meData = await meRes.json();
+                    if (meData?.profile?.id) {
+                        effectiveClientId = meData.profile.id;
+                        setClientProfileId(meData.profile.id);
+                    }
+                }
+            } catch {
+                // ignore
             }
         }
 
@@ -1800,7 +1856,7 @@ const Apply = () => {
             phone,
             startDate,
             numberOfPeople,
-            clientId: clientProfileId ?? null,
+            clientId: effectiveClientId,
             agencyId: null,
 
             passengers: passengers.map((pax) => ({
@@ -1811,9 +1867,9 @@ const Apply = () => {
                 nationality: pax.nationality,
                 passportNumber: pax.passportNumber,
                 passportIssueDate:
-                pax.passportIssueDate,
+                    pax.passportIssueDate,
                 passportExpiryDate:
-                pax.passportExpiryDate,
+                    pax.passportExpiryDate,
                 email: pax.email,
 
                 documents: Object.entries(
@@ -1821,7 +1877,7 @@ const Apply = () => {
                 ).map(([reqId, doc]) => ({
                     requirementId: reqId,
                     fileUrl: doc.fileUrl,
-                    originalName: doc.originalName,
+                    originalName: doc.originalName || 'document.pdf',
                 })),
             })),
         });
@@ -1829,10 +1885,16 @@ const Apply = () => {
         localStorage.removeItem('apply_draft');
 
         const createdId =
-            result?.data?.id ||
-            result?.id ||
             result?.data?.applicationId ||
-            result?.applicationId;
+            result?.data?.id ||
+            result?.data?._id ||
+            result?.data?.application?.id ||
+            result?.data?.application?._id ||
+            result?.applicationId ||
+            result?.id ||
+            result?._id ||
+            result?.application?.id ||
+            appId;
 
         if (createdId) {
             setAppId(createdId);
@@ -1842,6 +1904,24 @@ const Apply = () => {
     };
 
     const handlePaySatim = async () => {
+        const token = localStorage.getItem('token');
+        if (!token && !user) {
+            save();
+            toast({
+                title: 'Connexion requise',
+                description:
+                    'Veuillez vous connecter pour valider et payer votre demande.',
+                variant: 'destructive',
+            });
+            navigate(
+                `/login?redirect=${encodeURIComponent(
+                    window.location.pathname +
+                    window.location.search
+                )}`
+            );
+            return;
+        }
+
         setSubmitting(true);
 
         try {
@@ -1870,15 +1950,16 @@ const Apply = () => {
                 }
             }
 
-            const result =
-                await submitApplication();
-
-            const targetAppId =
-                result?.id ||
-                result?.applicationId ||
-                result?.data?.id ||
-                result?.data?.applicationId ||
-                appId;
+            let targetAppId = appId;
+            if (!targetAppId) {
+                const result = await submitApplication();
+                targetAppId =
+                    result?.applicationId ||
+                    result?.id ||
+                    (result as any)?.data?.applicationId ||
+                    (result as any)?.data?.id ||
+                    appId;
+            }
 
             if (!targetAppId) {
                 throw new Error("Identifiant de la demande introuvable après création.");
@@ -1890,8 +1971,17 @@ const Apply = () => {
                     captchaToken
                 );
 
+            setAppSession();
             window.location.href = formUrl;
         } catch (err: any) {
+            if (recaptchaWidgetId.current !== null && window.grecaptcha?.reset) {
+                try {
+                    window.grecaptcha.reset(recaptchaWidgetId.current);
+                    setCaptchaVerified(false);
+                } catch {
+                    // ignore
+                }
+            }
             const rawMsg = err?.message ?? '';
             const msg = (rawMsg && rawMsg !== 'null' && rawMsg !== '[object Object]')
                 ? rawMsg
@@ -1907,10 +1997,30 @@ const Apply = () => {
     };
 
     const handlePayAgence = async () => {
+        const token = localStorage.getItem('token');
+        if (!token && !user) {
+            save();
+            toast({
+                title: 'Connexion requise',
+                description:
+                    'Veuillez vous connecter pour enregistrer votre demande.',
+                variant: 'destructive',
+            });
+            navigate(
+                `/login?redirect=${encodeURIComponent(
+                    window.location.pathname +
+                    window.location.search
+                )}`
+            );
+            return;
+        }
+
         setSubmitting(true);
 
         try {
-            await submitApplication();
+            if (!appId) {
+                await submitApplication();
+            }
 
             toast({
                 title: 'Demande enregistrée',
@@ -1920,9 +2030,13 @@ const Apply = () => {
 
             navigate('/client/applications');
         } catch (err: any) {
+            const rawMsg = err?.message ?? '';
+            const msg = (rawMsg && rawMsg !== 'null' && rawMsg !== '[object Object]')
+                ? rawMsg
+                : "Une erreur est survenue lors de l'enregistrement de votre demande.";
             toast({
                 title: 'Erreur',
-                description: err.message,
+                description: msg,
                 variant: 'destructive',
             });
         } finally {
@@ -2020,9 +2134,8 @@ const Apply = () => {
             'Décembre',
         ];
 
-        return `${parseInt(d)} ${
-            months[parseInt(m) - 1]
-        } ${y}`;
+        return `${parseInt(d)} ${months[parseInt(m) - 1]
+            } ${y}`;
     };
 
 
@@ -2069,9 +2182,9 @@ const Apply = () => {
                     </p>
 
                     <div className="inline-block border-2 border-blue-100 rounded-full px-6 py-2">
-            <span className="font-mono font-bold text-base tracking-wider text-gray-800">
-              {appId}
-            </span>
+                        <span className="font-mono font-bold text-base tracking-wider text-gray-800">
+                            {appId}
+                        </span>
                     </div>
 
                     <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
@@ -2118,180 +2231,6 @@ const Apply = () => {
                         <ArrowLeft className="w-3.5 h-3.5" />
                         <span>Retour aux visas</span>
                     </button>
-                </div>
-
-                {/* ─────────────────────────────────────────────
-            HEADER / STEPPER
-        ───────────────────────────────────────────── */}
-
-                <div className="bg-white rounded-[20px] sm:rounded-[24px] p-3.5 sm:p-6 shadow-sm border border-gray-100 mb-4 sm:mb-6 flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4 lg:gap-6">
-
-                    <div className="lg:w-1/4">
-                        <h2 className="text-lg sm:text-2xl font-bold text-[#002161]">
-                            Votre demande de visa
-                        </h2>
-
-                        <p className="text-[11px] sm:text-sm text-gray-500 mt-0.5">
-                            Simple, rapide et 100% en ligne
-                        </p>
-                    </div>
-
-                    <div className="flex items-center justify-start lg:justify-end gap-1.5 sm:gap-2 overflow-x-auto hide-scrollbar pb-1 lg:pb-0 w-full">
-
-                        {/* Step 1 */}
-
-                        <div
-                            className={cn(
-                                "flex items-center gap-2 sm:gap-3 rounded-[14px] sm:rounded-[20px] p-1.5 sm:p-2 pr-3 sm:pr-6 shrink-0 transition-colors",
-                                step === 1
-                                    ? "bg-blue-50/60 border border-blue-100"
-                                    : ""
-                            )}
-                        >
-                            <div
-                                className={cn(
-                                    "w-8 h-8 sm:w-12 sm:h-12 rounded-full flex items-center justify-center shrink-0 transition-colors",
-                                    step >= 1
-                                        ? "bg-[#0865FE] text-white shadow-md shadow-blue-500/20"
-                                        : "border-2 border-gray-100 text-gray-400 bg-gray-50"
-                                )}
-                            >
-                                <Globe className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
-                            </div>
-
-                            <div>
-                                <div
-                                    className={cn(
-                                        "font-bold text-[10px] sm:text-sm",
-                                        step >= 1
-                                            ? "text-[#0865FE]"
-                                            : "text-gray-400"
-                                    )}
-                                >
-                                    01
-                                </div>
-
-                                <div
-                                    className={cn(
-                                        "font-bold text-[10px] sm:text-[13px]",
-                                        step >= 1
-                                            ? "text-[#002161]"
-                                            : "text-gray-800"
-                                    )}
-                                >
-                                    Destination
-                                </div>
-
-                                <div className="text-gray-400 text-[10px] sm:text-[11px] hidden sm:block">
-                                    Choisissez votre pays
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="w-3 sm:w-8 border-t-2 border-dashed border-gray-200 shrink-0" />
-
-                        {/* Step 2 */}
-
-                        <div
-                            className={cn(
-                                "flex items-center gap-2 sm:gap-3 rounded-[14px] sm:rounded-[20px] p-1.5 sm:p-2 pr-3 sm:pr-6 shrink-0 transition-colors",
-                                step === 2
-                                    ? "bg-blue-50/60 border border-blue-100"
-                                    : ""
-                            )}
-                        >
-                            <div
-                                className={cn(
-                                    "w-8 h-8 sm:w-12 sm:h-12 rounded-full flex items-center justify-center shrink-0 transition-colors",
-                                    step >= 2
-                                        ? "bg-[#0865FE] text-white shadow-md shadow-blue-500/20"
-                                        : "border-2 border-gray-100 text-gray-400 bg-gray-50"
-                                )}
-                            >
-                                <User className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
-                            </div>
-
-                            <div>
-                                <div
-                                    className={cn(
-                                        "font-bold text-[10px] sm:text-sm",
-                                        step >= 2
-                                            ? "text-[#0865FE]"
-                                            : "text-gray-400"
-                                    )}
-                                >
-                                    02
-                                </div>
-
-                                <div
-                                    className={cn(
-                                        "font-bold text-[10px] sm:text-[13px]",
-                                        step >= 2
-                                            ? "text-[#002161]"
-                                            : "text-gray-800"
-                                    )}
-                                >
-                                    Voyageurs
-                                </div>
-
-                                <div className="text-gray-400 text-[10px] sm:text-[11px] hidden sm:block">
-                                    Informations et documents
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="w-3 sm:w-8 border-t-2 border-dashed border-gray-200 shrink-0" />
-
-                        {/* Step 3 */}
-
-                        <div
-                            className={cn(
-                                "flex items-center gap-2 sm:gap-3 rounded-[14px] sm:rounded-[20px] p-1.5 sm:p-2 pr-3 sm:pr-6 shrink-0 transition-colors",
-                                step === 3
-                                    ? "bg-blue-50/60 border border-blue-100"
-                                    : ""
-                            )}
-                        >
-                            <div
-                                className={cn(
-                                    "w-8 h-8 sm:w-12 sm:h-12 rounded-full flex items-center justify-center shrink-0 transition-colors",
-                                    step >= 3
-                                        ? "bg-[#0865FE] text-white shadow-md shadow-blue-500/20"
-                                        : "border-2 border-gray-100 text-gray-400 bg-gray-50"
-                                )}
-                            >
-                                <CreditCard className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
-                            </div>
-
-                            <div>
-                                <div
-                                    className={cn(
-                                        "font-bold text-[10px] sm:text-sm",
-                                        step >= 3
-                                            ? "text-[#0865FE]"
-                                            : "text-gray-400"
-                                    )}
-                                >
-                                    03
-                                </div>
-
-                                <div
-                                    className={cn(
-                                        "font-bold text-[10px] sm:text-[13px]",
-                                        step >= 3
-                                            ? "text-[#002161]"
-                                            : "text-gray-800"
-                                    )}
-                                >
-                                    Paiement
-                                </div>
-
-                                <div className="text-gray-400 text-[10px] sm:text-[11px] hidden sm:block">
-                                    Paiement sécurisé
-                                </div>
-                            </div>
-                        </div>
-                    </div>
                 </div>
 
                 {/* ─────────────────────────────────────────────
@@ -2418,9 +2357,9 @@ const Apply = () => {
                                                                 </div>
 
                                                                 <div className="absolute inset-x-0 bottom-0 p-2">
-                                  <span className="text-white text-[12px] sm:text-[13px] font-bold drop-shadow-md leading-tight block truncate">
-                                    {c.name}
-                                  </span>
+                                                                    <span className="text-white text-[12px] sm:text-[13px] font-bold drop-shadow-md leading-tight block truncate">
+                                                                        {c.name}
+                                                                    </span>
                                                                 </div>
                                                             </button>
                                                         );
@@ -2559,8 +2498,8 @@ const Apply = () => {
                                                                     </div>
 
                                                                     <span className="text-[9px] sm:text-[11px] font-medium text-gray-700 text-center max-w-[52px] sm:max-w-[64px] leading-tight group-hover:text-blue-600 transition-colors truncate w-full block">
-              {c.name}
-            </span>
+                                                                        {c.name}
+                                                                    </span>
                                                                 </button>
                                                             )
                                                         )}
@@ -2687,15 +2626,15 @@ const Apply = () => {
 
                                                                             <div className="flex flex-wrap gap-1.5 mt-2.5">
 
-                                        <span className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-semibold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-100">
-                                          <CheckCircle2 className="w-3 h-3" />
-                                            {v.processingDelay} j. ouvrés
-                                        </span>
+                                                                                <span className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-semibold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-100">
+                                                                                    <CheckCircle2 className="w-3 h-3" />
+                                                                                    {v.processingDelay} j. ouvrés
+                                                                                </span>
 
                                                                                 <span className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-semibold px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-100">
-                                          <Calendar className="w-3 h-3" />
+                                                                                    <Calendar className="w-3 h-3" />
                                                                                     {v.duration} j. validité
-                                        </span>
+                                                                                </span>
 
                                                                             </div>
                                                                         </div>
@@ -2817,8 +2756,8 @@ const Apply = () => {
                                                             >
                                                                 <Edit2 className="w-3 h-3 text-[#0865FE]" />
                                                                 <span className="text-[#0865FE]">
-                                  Modifier
-                                </span>
+                                                                    Modifier
+                                                                </span>
                                                             </button>
                                                         )}
                                                     </div>
@@ -2866,8 +2805,8 @@ const Apply = () => {
                                                                             />
 
                                                                             <span className="text-[12px] font-bold text-gray-700">
-                                        +213
-                                      </span>
+                                                                                +213
+                                                                            </span>
                                                                         </div>
 
                                                                         <div className="relative flex-1">
@@ -2934,8 +2873,8 @@ const Apply = () => {
                                                                         </button>
 
                                                                         <span className="w-8 text-center text-base font-bold text-[#002161]">
-                                      {numberOfPeople}
-                                    </span>
+                                                                            {numberOfPeople}
+                                                                        </span>
 
                                                                         <button
                                                                             onClick={() =>
@@ -3000,38 +2939,38 @@ const Apply = () => {
 
                                                         <div className="flex flex-wrap items-center gap-3 text-[12px] text-gray-600 bg-gray-50 p-3 rounded-xl border border-gray-100">
 
-                              <span className="flex items-center gap-1.5">
-                                <Mail className="w-3.5 h-3.5 text-[#0865FE]" />
-                                <span className="font-semibold text-[#002161] truncate">
-                                  {email}
-                                </span>
-                              </span>
+                                                            <span className="flex items-center gap-1.5">
+                                                                <Mail className="w-3.5 h-3.5 text-[#0865FE]" />
+                                                                <span className="font-semibold text-[#002161] truncate">
+                                                                    {email}
+                                                                </span>
+                                                            </span>
 
                                                             <span className="flex items-center gap-1.5">
-                                <Phone className="w-3.5 h-3.5 text-[#0865FE]" />
-                                <span className="font-semibold text-[#002161]">
-                                  +213 {phone}
-                                </span>
-                              </span>
+                                                                <Phone className="w-3.5 h-3.5 text-[#0865FE]" />
+                                                                <span className="font-semibold text-[#002161]">
+                                                                    +213 {phone}
+                                                                </span>
+                                                            </span>
 
                                                             <span className="flex items-center gap-1.5">
-                                <Calendar className="w-3.5 h-3.5 text-[#0865FE]" />
-                                <span>
-                                  Départ:{' '}
-                                    <strong>
-                                    {formatDate(
-                                        startDate
-                                    )}
-                                  </strong>
-                                </span>
-                              </span>
+                                                                <Calendar className="w-3.5 h-3.5 text-[#0865FE]" />
+                                                                <span>
+                                                                    Départ:{' '}
+                                                                    <strong>
+                                                                        {formatDate(
+                                                                            startDate
+                                                                        )}
+                                                                    </strong>
+                                                                </span>
+                                                            </span>
 
                                                             <span className="flex items-center gap-1.5">
-                                <Users className="w-3.5 h-3.5 text-[#0865FE]" />
-                                <span>
-                                  {numberOfPeople} pers.
-                                </span>
-                              </span>
+                                                                <Users className="w-3.5 h-3.5 text-[#0865FE]" />
+                                                                <span>
+                                                                    {numberOfPeople} pers.
+                                                                </span>
+                                                            </span>
 
                                                         </div>
                                                     )}
@@ -3056,8 +2995,8 @@ const Apply = () => {
                                                     Détails des voyageurs
 
                                                     {passengers.every(
-                                                            paxComplete
-                                                        ) &&
+                                                        paxComplete
+                                                    ) &&
                                                         passengers.every((p) =>
                                                             paxDocsOk(p.id)
                                                         ) &&
@@ -3171,26 +3110,26 @@ const Apply = () => {
 
                                                                         <div className="flex items-center gap-2 mt-0.5">
 
-                                      <span
-                                          className={cn(
-                                              "text-[10px] font-semibold px-2 py-0.5 rounded-md shrink-0",
-                                              statusOk
-                                                  ? "bg-emerald-50 text-emerald-700"
-                                                  : "bg-amber-50 text-amber-700"
-                                          )}
-                                      >
-                                        {statusOk
-                                            ? 'Dossier complet'
-                                            : 'À compléter'}
-                                      </span>
+                                                                            <span
+                                                                                className={cn(
+                                                                                    "text-[10px] font-semibold px-2 py-0.5 rounded-md shrink-0",
+                                                                                    statusOk
+                                                                                        ? "bg-emerald-50 text-emerald-700"
+                                                                                        : "bg-amber-50 text-amber-700"
+                                                                                )}
+                                                                            >
+                                                                                {statusOk
+                                                                                    ? 'Dossier complet'
+                                                                                    : 'À compléter'}
+                                                                            </span>
 
                                                                             {!statusOk && (
                                                                                 <span className="text-[10px] text-gray-500">
-                                          ({fileCount(
-                                                                                    p.id
-                                                                                )}
+                                                                                    ({fileCount(
+                                                                                        p.id
+                                                                                    )}
                                                                                     /{reqCount} doc.)
-                                        </span>
+                                                                                </span>
                                                                             )}
 
                                                                         </div>
@@ -3324,11 +3263,11 @@ const Apply = () => {
                                                                             },
                                                                         ] as const).map(
                                                                             ({
-                                                                                 label,
-                                                                                 field,
-                                                                                 type,
-                                                                                 placeholder,
-                                                                             }: any) => (
+                                                                                label,
+                                                                                field,
+                                                                                type,
+                                                                                placeholder,
+                                                                            }: any) => (
                                                                                 <div
                                                                                     key={field}
                                                                                     className="space-y-1"
@@ -3341,8 +3280,8 @@ const Apply = () => {
                                                                                         type={type}
                                                                                         value={
                                                                                             (p as any)[
-                                                                                                field
-                                                                                                ] ?? ''
+                                                                                            field
+                                                                                            ] ?? ''
                                                                                         }
                                                                                         placeholder={
                                                                                             placeholder
@@ -3354,8 +3293,8 @@ const Apply = () => {
                                                                                                 p.id,
                                                                                                 {
                                                                                                     [field]:
-                                                                                                    e.target
-                                                                                                        .value,
+                                                                                                        e.target
+                                                                                                            .value,
                                                                                                 }
                                                                                             )
                                                                                         }
@@ -3390,8 +3329,8 @@ const Apply = () => {
                                                                                         p.id,
                                                                                         {
                                                                                             email:
-                                                                                            e.target
-                                                                                                .value,
+                                                                                                e.target
+                                                                                                    .value,
                                                                                         }
                                                                                     )
                                                                                 }
@@ -3413,11 +3352,11 @@ const Apply = () => {
                                                                                 </h5>
 
                                                                                 <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-[#0865FE]">
-                                          {fileCount(
-                                              p.id
-                                          )}{' '}
+                                                                                    {fileCount(
+                                                                                        p.id
+                                                                                    )}{' '}
                                                                                     / {reqCount}
-                                        </span>
+                                                                                </span>
                                                                             </div>
 
                                                                             <div className="grid sm:grid-cols-2 gap-2.5">
@@ -3485,15 +3424,15 @@ const Apply = () => {
                                                                                                         ) => ({
                                                                                                             ...prev,
                                                                                                             [p.id]:
-                                                                                                                {
-                                                                                                                    ...(prev[
-                                                                                                                            p
-                                                                                                                                .id
-                                                                                                                            ] ??
-                                                                                                                        {}),
-                                                                                                                    [req.id]:
+                                                                                                            {
+                                                                                                                ...(prev[
+                                                                                                                    p
+                                                                                                                        .id
+                                                                                                                ] ??
+                                                                                                                    {}),
+                                                                                                                [req.id]:
                                                                                                                     dropped,
-                                                                                                                },
+                                                                                                            },
                                                                                                         })
                                                                                                     );
 
@@ -3501,7 +3440,7 @@ const Apply = () => {
                                                                                                         title:
                                                                                                             'Fichier ajouté',
                                                                                                         description:
-                                                                                                        dropped.name,
+                                                                                                            dropped.name,
                                                                                                     });
                                                                                                 }}
                                                                                                 className="flex flex-col gap-2.5 p-3 rounded-xl border border-dashed transition-all"
@@ -3510,7 +3449,7 @@ const Apply = () => {
                                                                                                         file
                                                                                                             ? '#10B981'
                                                                                                             : dragOver ===
-                                                                                                            pk
+                                                                                                                pk
                                                                                                                 ? '#0865FE'
                                                                                                                 : '#CBD5E1',
                                                                                                     background:
@@ -3529,8 +3468,8 @@ const Apply = () => {
 
                                                                                                             {!req.isRequired && (
                                                                                                                 <span className="ml-1 font-normal text-gray-400">
-                                                          (Optionnel)
-                                                        </span>
+                                                                                                                    (Optionnel)
+                                                                                                                </span>
                                                                                                             )}
                                                                                                         </p>
 
@@ -3690,13 +3629,13 @@ const Apply = () => {
                                                             key={i}
                                                             className="flex items-center justify-between py-1.5 border-b border-gray-200/60 last:border-0"
                                                         >
-                              <span className="text-[12px] text-gray-500">
-                                {item.label}
-                              </span>
+                                                            <span className="text-[12px] text-gray-500">
+                                                                {item.label}
+                                                            </span>
 
                                                             <span className="text-[12px] font-semibold text-[#002161]">
-                                {item.value}
-                              </span>
+                                                                {item.value}
+                                                            </span>
                                                         </div>
                                                     ))}
                                                 </div>
@@ -3705,15 +3644,15 @@ const Apply = () => {
 
                                                     <div className="flex items-end justify-between">
 
-                            <span className="text-xs sm:text-sm font-bold text-gray-800">
-                              Total
-                            </span>
+                                                        <span className="text-xs sm:text-sm font-bold text-gray-800">
+                                                            Total
+                                                        </span>
 
                                                         <span className="text-xl sm:text-2xl font-black text-[#FFB400]">
-                              {formatAmount(
-                                  totalPrice
-                              )}
-                            </span>
+                                                            {formatAmount(
+                                                                totalPrice
+                                                            )}
+                                                        </span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -3755,7 +3694,7 @@ const Apply = () => {
                                                             className={cn(
                                                                 'w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-all',
                                                                 paymentMethod ===
-                                                                'satim'
+                                                                    'satim'
                                                                     ? 'border-[#0865FE]'
                                                                     : 'border-gray-300'
                                                             )}
@@ -3785,7 +3724,7 @@ const Apply = () => {
                                                     className={cn(
                                                         "flex flex-col gap-2.5 p-4 rounded-[18px] border-2 text-left transition-all relative overflow-hidden",
                                                         paymentMethod ===
-                                                        'agence'
+                                                            'agence'
                                                             ? "border-[#0865FE] bg-blue-50/20"
                                                             : "border-gray-200 hover:border-[#0865FE]/50"
                                                     )}
@@ -3806,7 +3745,7 @@ const Apply = () => {
                                                             className={cn(
                                                                 'w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-all',
                                                                 paymentMethod ===
-                                                                'agence'
+                                                                    'agence'
                                                                     ? 'border-[#0865FE]'
                                                                     : 'border-gray-300'
                                                             )}
@@ -3849,7 +3788,7 @@ const Apply = () => {
                                                                 />
 
                                                                 <span className="text-[11px] text-gray-600 leading-snug">
-                                J'accepte les{' '}
+                                                                    J'accepte les{' '}
                                                                     <button
                                                                         type="button"
                                                                         onClick={(e) => {
@@ -3860,10 +3799,10 @@ const Apply = () => {
                                                                         }}
                                                                         className="font-bold text-[#0865FE] hover:underline"
                                                                     >
-                                  conditions d'utilisation
-                                </button>
-                                .
-                              </span>
+                                                                        conditions d'utilisation
+                                                                    </button>
+                                                                    .
+                                                                </span>
 
                                                             </label>
 

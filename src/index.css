@@ -22,7 +22,7 @@
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
 
-    --primary: 217 99% 51%;            /* BookinGO blue #0865FE */
+    --primary: 220 75% 24%;            /* BookinGO Blue #0F2D6A */
     --primary-foreground: 0 0% 100%;
     --primary-glow: 249 46% 34%;       /* Purple-blue #3B2F7E */
     --gold: 41 100% 50%;               /* #FFB400 */
@@ -45,23 +45,23 @@
 
     --border: 214 32% 91%;
     --input: 214 32% 91%;
-    --ring: 217 99% 51%;
+    --ring: 220 75% 24%;
 
     --radius: 0.75rem;
 
-    --visa-blue: 217 99% 51%;
-    --visa-blue-dark: 217 99% 38%;
+    --visa-blue: 220 75% 24%;
+    --visa-blue-dark: 220 75% 18%;
     --visa-teal: 249 46% 34%;
     --visa-green: 160 84% 39%;
     --visa-green-light: 152 76% 80%;
     --visa-orange: 25 95% 53%;
     --visa-gold: 45 93% 47%;
 
-    --gradient-primary: linear-gradient(135deg, #0865FE, #3B2F7E);
-    --gradient-accent: linear-gradient(135deg, #0865FE, #3B2F7E);
+    --gradient-primary: linear-gradient(135deg, #0F2D6A, #3B2F7E);
+    --gradient-accent: linear-gradient(135deg, #0F2D6A, #3B2F7E);
     --shadow-soft: 0 1px 3px 0 hsl(222 47% 11% / 0.06), 0 1px 2px -1px hsl(222 47% 11% / 0.06);
-    --shadow-elegant: 0 10px 30px -10px hsl(217 99% 51% / 0.3);
-    --shadow-card-hover: 0 12px 32px -12px hsl(217 99% 51% / 0.22);
+    --shadow-elegant: 0 10px 30px -10px hsl(220 75% 24% / 0.3);
+    --shadow-card-hover: 0 12px 32px -12px hsl(220 75% 24% / 0.22);
 
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;

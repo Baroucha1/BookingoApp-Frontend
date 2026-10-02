@@ -123,15 +123,17 @@ const Navbar = () => {
         <div className="max-w-7xl mx-auto flex items-center justify-between h-12">
 
           {/* Logo */}
-          <Link to="/" className="flex items-center shrink-0 active:scale-95 transition-transform">
-            <span
+          <Link to="/" className="flex items-center shrink-0 active:scale-95 transition-transform" aria-label="BookinGO">
+            <img
+              src="/chart/LOGO_BOOKINGO.png"
+              alt="BookinGO"
               className={cn(
-                "font-extrabold text-2xl sm:text-3xl tracking-tight transition-colors drop-shadow-xs",
-                (isTransparentAndDark || isHotelSection) ? "text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.7)]" : "text-[#002161] dark:text-white"
+                "h-7 sm:h-8 w-auto object-contain transition-all",
+                (isTransparentAndDark || isHotelSection)
+                  ? "brightness-0 invert drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]"
+                  : "drop-shadow-xs"
               )}
-            >
-              Bookin<span className="text-[#FFAA01]">GO</span>
-            </span>
+            />
           </Link>
 
           {/* Nav links (Desktop & Tablet) */}

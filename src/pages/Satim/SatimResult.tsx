@@ -15,6 +15,7 @@ import {
     confirmFlightSatimPayment,
     type ReceiptData,
 } from '@/service/payment.service';
+import { redirectToApp } from '@/lib/satimRedirect';
 
 type Status  = 'PENDING' | 'PAID' | 'FAILED';
 type PayType = 'visa' | 'flight';
@@ -85,7 +86,7 @@ const SatimResult = () => {
                 variant: 'destructive',
             });
             const t = setTimeout(() => {
-                navigate(mainPage, { replace: true });
+                redirectToApp(navigate, mainPage, { replace: true });
             }, 800);
             return () => clearTimeout(t);
         }
@@ -147,7 +148,7 @@ const SatimResult = () => {
 
                         // Rediriger automatiquement vers la page d'origine de la requête (vols ou visa)
                         const redirectTimer = setTimeout(() => {
-                            navigate(mainPage, { replace: true });
+                            redirectToApp(navigate, mainPage, { replace: true });
                         }, 2500);
 
                         return () => clearTimeout(redirectTimer);
@@ -227,7 +228,7 @@ const SatimResult = () => {
                 <AlertCircle className="w-10 h-10 text-destructive mx-auto" />
                 <p className="font-semibold">Une erreur est survenue</p>
                 <p className="text-muted-foreground text-sm">{error}</p>
-                <Button onClick={() => navigate(mainPage)}>Retour aux {mainPageLabel}</Button>
+                <Button onClick={() => redirectToApp(navigate, mainPage)}>Retour aux {mainPageLabel}</Button>
             </div>
         </div>
     );
@@ -395,39 +396,39 @@ const SatimResult = () => {
                 {/* ── Boutons navigation ── */}
                 <div className="flex flex-col sm:flex-row gap-3 justify-center print:hidden">
                     {status === 'PAID' && type === 'visa' && <>
-                        <Button onClick={() => navigate('/client/applications')}
+                        <Button onClick={() => redirectToApp(navigate, '/client/applications')}
                                 className="text-white font-semibold rounded-full px-6"
                                 style={{ background: 'linear-gradient(135deg, #0865FE, #3B2F7E)' }}>
                             Voir mes demandes
                         </Button>
-                        <Button variant="outline" onClick={() => navigate('/')} className="rounded-full px-6">
+                        <Button variant="outline" onClick={() => redirectToApp(navigate, '/')} className="rounded-full px-6">
                             Accueil
                         </Button>
                     </>}
                     {status === 'PAID' && type === 'flight' && <>
-                        <Button onClick={() => navigate(`/flights/booking/${bookingId}`)}
+                        <Button onClick={() => redirectToApp(navigate, `/flights/booking/${bookingId}`)}
                                 className="text-white font-semibold rounded-full px-6"
                                 style={{ background: 'linear-gradient(135deg, #0865FE, #3B2F7E)' }}>
                             Voir ma réservation
                         </Button>
-                        <Button variant="outline" onClick={() => navigate('/flights')} className="rounded-full px-6">
+                        <Button variant="outline" onClick={() => redirectToApp(navigate, '/flights')} className="rounded-full px-6">
                             Rechercher un vol
                         </Button>
                     </>}
                     {status === 'FAILED' && <>
-                        <Button onClick={() => navigate(mainPage)}
+                        <Button onClick={() => redirectToApp(navigate, mainPage)}
                                 className="text-white font-semibold rounded-full px-6"
                                 style={{ background: 'linear-gradient(135deg, #0865FE, #3B2F7E)' }}>
                             {type === 'flight' ? 'Retour aux vols' : 'Retour aux visas'}
                         </Button>
                         <Button variant="outline"
-                                onClick={() => navigate(type === 'flight' ? '/flights/my-bookings' : '/client/applications')}
+                                onClick={() => redirectToApp(navigate, type === 'flight' ? '/flights/my-bookings' : '/client/applications')}
                                 className="rounded-full px-6">
                             {type === 'flight' ? 'Mes réservations' : 'Mes demandes'}
                         </Button>
                     </>}
                     {status === 'PENDING' && <>
-                        <Button onClick={() => navigate(type === 'flight' ? '/flights/my-bookings' : '/client/applications')}
+                        <Button onClick={() => redirectToApp(navigate, type === 'flight' ? '/flights/my-bookings' : '/client/applications')}
                                 className="text-white font-semibold rounded-full px-6"
                                 style={{ background: 'linear-gradient(135deg, #0865FE, #3B2F7E)' }}>
                             {type === 'flight' ? 'Mes réservations' : 'Voir mes demandes'}

@@ -35,11 +35,10 @@ export default function HotelSearchLoadingOverlay({ active }: Props) {
     return (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#F0F6FF]/80 backdrop-blur-xs px-4 select-none animate-in fade-in duration-150">
             <div className="flex flex-col items-center justify-center gap-4 text-center max-w-sm">
-                {/* BookinGO Logo */}
                 <img
-                    src="/bookingo-logo.png"
+                    src="/chart/LOGO_BOOKINGO.png"
                     alt="BookinGO"
-                    className="h-9 sm:h-10 w-auto opacity-90 drop-shadow-2xs"
+                    className="h-9 sm:h-10 w-auto object-contain opacity-90 drop-shadow-2xs"
                 />
 
                 {/* Animated Spinner */}

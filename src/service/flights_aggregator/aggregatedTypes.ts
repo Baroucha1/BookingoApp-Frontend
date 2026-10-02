@@ -1,5 +1,7 @@
 // src/service/Flights/aggregatedTypes.ts
 
+import { BagOption } from "@/service/flights_aggregator/aggregatedNormalize.ts";
+
 export type CabinClass = 'Y' | 'C' | 'F' | 'W';
 
 export interface FlightLeg {
@@ -54,16 +56,22 @@ export interface NormalizedOffer {
     expirationDateTime?: string;
     segments: NormalizedSegment[];
     cabin: { code: string | null; name: string | null; brand: string | null; fareBasisCode: string | null };
-    baggage: {
-        chargeableFirstBagPrice: null;
-        checked: string | null; cabin: string | null };
+    bagOptions?: BagOption[];
+    bagsTotal?: number;
+    baggage?: {
+        checked: string | null;
+        cabin?: string | null;
+        chargeableFirstBagPrice?: { amount: number; currency: string } | null;
+    };
     refundable: boolean | null;
     cancellationFee: { amount: number | null; currency: string | null } | null;
     changeFee: { amount: number | null; currency: string | null } | null;
     seatsRemaining: number | null;
     legs?: {
-        baggage?: { checked: string | null };
-        originDestId: string; segments: NormalizedSegment[] }[];
+        originDestId: string;
+        segments: NormalizedSegment[];
+        baggage?: { checked: string | null; cabin?: string | null };
+    }[];
     instantTicketingRequired?: boolean;
     validatingCarrierCode?: string | null;
     amenities?: Amenity[];
@@ -86,6 +94,8 @@ export interface PassengerInput {
     expiryDate: string;
     mail?: string;
     tel?: string;
+    fidelityAirline?: string;
+    fidelityNumber?: string;
 }
 
 export interface BookFlightResult {

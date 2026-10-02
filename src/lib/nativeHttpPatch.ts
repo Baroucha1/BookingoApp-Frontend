@@ -2,6 +2,47 @@ import { Capacitor, CapacitorHttp, HttpOptions, HttpResponse } from '@capacitor/
 
 const originalFetch = window.fetch.bind(window);
 
+const readFileAsBase64 = (blob: Blob): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = (reader.result as string) || '';
+      const commaIdx = result.indexOf(',');
+      resolve(commaIdx >= 0 ? result.slice(commaIdx + 1) : result);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+};
+
+const serializeFormDataForCapacitor = async (formData: FormData): Promise<any[]> => {
+  const list: any[] = [];
+  const entries: [string, any][] = [];
+  formData.forEach((value, key) => {
+    entries.push([key, value]);
+  });
+
+  for (const [key, value] of entries) {
+    if (value instanceof Blob || (typeof File !== 'undefined' && value instanceof File)) {
+      const base64 = await readFileAsBase64(value);
+      list.push({
+        key,
+        value: base64,
+        type: 'base64File',
+        contentType: value.type || 'application/octet-stream',
+        fileName: (value as File).name || 'file',
+      });
+    } else {
+      list.push({
+        key,
+        value: String(value),
+        type: 'string',
+      });
+    }
+  }
+  return list;
+};
+
 // Check if running in a native Capacitor environment (Android / iOS)
 export function setupNativeHttpPatch() {
   if (!Capacitor.isNativePlatform()) {
@@ -46,18 +87,16 @@ export function setupNativeHttpPatch() {
         }
       }
 
-      // Safe Origin header: only add if not already defined
-      const hasOrigin = Object.keys(headers).some(k => k.toLowerCase() === 'origin');
-      if (!hasOrigin) {
-        if (typeof window !== 'undefined' && window.location.origin && window.location.origin.startsWith('http')) {
-          headers['Origin'] = window.location.origin;
-        } else {
-          headers['Origin'] = 'capacitor://localboat';
-        }
+      // Safe Origin header: backend requires https://app.bookingo.net or https://bookingo.net for CORS
+      const originKey = Object.keys(headers).find(k => k.toLowerCase() === 'origin') || 'Origin';
+      const currentOrigin = headers[originKey] || (typeof window !== 'undefined' ? window.location?.origin : '');
+      if (!currentOrigin || currentOrigin.includes('localhost') || currentOrigin.startsWith('capacitor://') || currentOrigin.includes('localboat')) {
+        headers[originKey] = 'https://app.bookingo.net';
       }
 
       // Prepare request body
       let data: any = init?.body;
+      let dataType: 'formData' | undefined = undefined;
       const isBodyAllowed = method !== 'GET' && method !== 'HEAD';
 
       if (!isBodyAllowed || data === undefined || data === null) {
@@ -68,6 +107,13 @@ export function setupNativeHttpPatch() {
           }
         });
         data = undefined;
+      } else if (typeof FormData !== 'undefined' && data instanceof FormData) {
+        dataType = 'formData';
+        data = await serializeFormDataForCapacitor(data);
+        const hasContentType = Object.keys(headers).some(k => k.toLowerCase() === 'content-type');
+        if (!hasContentType) {
+          headers['Content-Type'] = 'multipart/form-data';
+        }
       }
 
       const options: HttpOptions = {
@@ -75,6 +121,7 @@ export function setupNativeHttpPatch() {
         method,
         headers,
         ...(data !== undefined ? { data } : {}),
+        ...(dataType ? { dataType } : {}),
       };
 
       const res: HttpResponse = await CapacitorHttp.request(options);
@@ -109,6 +156,14 @@ export function setupNativeHttpPatch() {
       // Explicitly override response.json() in case Response polyfill has issues
       if (typeof res.data === 'object' && res.data !== null) {
         response.json = async () => res.data;
+      } else if (typeof res.data === 'string') {
+        response.json = async () => {
+          try {
+            return JSON.parse(res.data);
+          } catch {
+            return res.data;
+          }
+        };
       }
 
       return response;

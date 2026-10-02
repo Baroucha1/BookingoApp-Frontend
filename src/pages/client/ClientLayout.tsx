@@ -123,11 +123,13 @@ const ClientLayout = () => {
           <path d="M-10 110 Q 80 90, 150 130 T 290 100" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 5" />
         </svg>
 
-        <Link to="/" className="px-6 pt-7 pb-4 relative z-10">
-          <p className="text-2xl font-bold text-white leading-tight">
-            Bookin<span className="text-amber-400">GO</span>
-          </p>
-          <p className="text-xs text-blue-100/80 mt-0.5">Voyagez, vivez plus</p>
+        <Link to="/" className="px-6 pt-7 pb-4 relative z-10 block" aria-label="BookinGO">
+          <img
+            src="/chart/LOGO_BOOKINGO.png"
+            alt="BookinGO"
+            className="h-8 w-auto object-contain brightness-0 invert drop-shadow-xs"
+          />
+          <p className="text-[11px] text-blue-100/90 mt-1 font-medium tracking-wide">Book Easy. Go Anywhere !</p>
         </Link>
 
         <nav className="mt-2 px-3 flex-1 overflow-y-auto relative z-10">
@@ -169,10 +171,12 @@ const ClientLayout = () => {
         >
           {/* Mobile logo */}
           <div className="flex items-center gap-2 md:hidden">
-            <Link to="/" className="flex items-center">
-              <span className="text-xl font-bold text-gray-900 dark:text-white">
-                Bookin<span className="text-amber-500">GO</span>
-              </span>
+            <Link to="/" className="flex items-center" aria-label="BookinGO">
+              <img
+                src="/chart/LOGO_BOOKINGO.png"
+                alt="BookinGO"
+                className="h-7 w-auto object-contain"
+              />
             </Link>
           </div>
 

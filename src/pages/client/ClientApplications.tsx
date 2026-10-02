@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { VisaApplication, VisaTypeDocumentRequirement, Passenger, ApplicationStatus, PaymentStatus } from '@/lib/types';
 import { getApplicationsByClient } from '@/service/visaApplication.service.ts';
 import { initiateSatimPayment } from '@/service/payment.service';
+import { setAppSession } from '@/lib/satimRedirect';
 import AppLoading from '@/components/common/AppLoading';
 
 const API = import.meta.env.VITE_API_URL;
@@ -265,6 +266,7 @@ const ClientApplications = () => {
         return;
       }
       const { formUrl } = await initiateSatimPayment(captchaModal, captchaToken);
+      setAppSession();
       window.location.href = formUrl;
     } catch (err: any) {
       toast({ title: 'Erreur paiement', description: err.message, variant: 'destructive' });

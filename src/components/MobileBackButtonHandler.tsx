@@ -2,25 +2,44 @@ import { useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { toast } from 'sonner';
+import { App } from '@capacitor/app';
+import type { PluginListenerHandle } from '@capacitor/core';
 
 export const MobileBackButtonHandler = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { language } = useLanguage();
+
+  const locationRef = useRef(location.pathname);
+  locationRef.current = location.pathname;
+
+  const languageRef = useRef(language);
+  languageRef.current = language;
+
   const lastPressRef = useRef<number>(0);
   const lastBackActionRef = useRef<number>(0);
 
   useEffect(() => {
     const handleBack = () => {
       const now = Date.now();
-      if (now - lastBackActionRef.current < 450) {
+      if (now - lastBackActionRef.current < 350) {
         return;
       }
       lastBackActionRef.current = now;
 
       // 1. If any modal / dialog / sheet / popover is currently open, close it
       const closeBtn = document.querySelector(
-        '[data-state="open"] button[aria-label="Close"], [data-state="open"] .lucide-x, [role="dialog"] button[aria-label="Close"], [aria-modal="true"] button[aria-label="Close"]'
+        '[data-state="open"] button[aria-label="Close"], ' +
+        '[data-state="open"] button[aria-label="Fermer"], ' +
+        '[data-state="open"] button[aria-label="Retour"], ' +
+        '[role="dialog"] button[aria-label="Close"], ' +
+        '[role="dialog"] button[aria-label="Fermer"], ' +
+        '[role="dialog"] button[aria-label="Retour"], ' +
+        '[aria-modal="true"] button[aria-label="Close"], ' +
+        '[aria-modal="true"] button[aria-label="Fermer"], ' +
+        '[aria-modal="true"] button[aria-label="Retour"], ' +
+        '.fixed.inset-0 button[aria-label="Fermer"], ' +
+        '.fixed.inset-0 button[aria-label="Retour"]'
       ) as HTMLElement | null;
 
       if (closeBtn) {
@@ -28,63 +47,59 @@ export const MobileBackButtonHandler = () => {
         return;
       }
 
-      // 2. If not on home / root, navigate back in router history
+      const currentPath = locationRef.current;
       const isRoot =
-        location.pathname === '/' ||
-        location.pathname === '/home' ||
-        location.pathname === '/index.html';
+        currentPath === '/' ||
+        currentPath === '/home' ||
+        currentPath === '/index.html';
 
+      // 2. If not on home / root, navigate back in router history
       if (!isRoot) {
-        navigate(-1);
+        if (window.history.state && window.history.state.idx > 0) {
+          navigate(-1);
+        } else {
+          // If no history stack exists, go to home
+          navigate('/');
+        }
         return;
       }
 
       // 3. If on root, prompt double press to exit app
       if (lastPressRef.current && now - lastPressRef.current < 2000) {
-        const nativeApp = (window as any).AndroidNativeApp;
-        const capApp = (window as any).Capacitor?.Plugins?.App;
-
-        if (nativeApp?.exitApp) {
-          nativeApp.exitApp();
-        } else if (capApp?.exitApp) {
-          capApp.exitApp();
-        }
+        App.exitApp();
       } else {
         lastPressRef.current = now;
-        toast.info(language === 'ar' ? 'اضغط مرة أخرى للخروج' : 'Appuyez à nouveau pour quitter', {
+        const lang = languageRef.current;
+        toast.info(lang === 'ar' ? 'اضغط مرة أخرى للخروج' : 'Appuyez à nouveau pour quitter', {
           duration: 2000,
         });
       }
     };
 
-    // Expose global callback for Android MainActivity
+    // Expose global callback for Android MainActivity or webview
     (window as any).__handleAppBack = handleBack;
 
-    // Listen to Cordova / Capacitor document 'backbutton' event
+    // Listen to Capacitor App plugin backButton event (native Android back button & gestures)
+    let backListener: PluginListenerHandle | undefined;
+    App.addListener('backButton', () => {
+      handleBack();
+    }).then((handle) => {
+      backListener = handle;
+    }).catch(() => {});
+
+    // Listen to Cordova / Capacitor document 'backbutton' event as fallback
     const onDocBackButton = (e: Event) => {
       e.preventDefault();
       handleBack();
     };
     document.addEventListener('backbutton', onDocBackButton);
 
-    // Also listen to Capacitor App plugin if available
-    let removeCapListener: (() => void) | undefined;
-    try {
-      const capApp = (window as any).Capacitor?.Plugins?.App;
-      if (capApp?.addListener) {
-        const handle = capApp.addListener('backButton', () => {
-          handleBack();
-        });
-        removeCapListener = () => handle?.remove?.();
-      }
-    } catch (_) {}
-
-    // iOS Edge Swipe Gesture Handler (Works in Capacitor WKWebView, Safari, and PWA)
-    const isRTL = language === 'ar' || document.documentElement.dir === 'rtl';
-    const EDGE_THRESHOLD = 35; // px from screen edge
-    const MIN_SWIPE_DISTANCE = 50; // px minimum swipe
-    const MAX_VERTICAL_DEVIATION = 60; // px
-    const MAX_SWIPE_DURATION = 650; // ms
+    // iOS Edge Swipe Gesture Handler
+    const isRTL = languageRef.current === 'ar' || document.documentElement.dir === 'rtl';
+    const EDGE_THRESHOLD = 35;
+    const MIN_SWIPE_DISTANCE = 50;
+    const MAX_VERTICAL_DEVIATION = 60;
+    const MAX_SWIPE_DURATION = 650;
 
     let touchStartX = 0;
     let touchStartY = 0;
@@ -103,10 +118,8 @@ export const MobileBackButtonHandler = () => {
 
       const screenWidth = window.innerWidth;
       if (!isRTL) {
-        // Left edge swipe (from left edge towards right)
         isEdgeSwipeCandidate = touchStartX <= EDGE_THRESHOLD;
       } else {
-        // Right edge swipe for RTL Arabic (from right edge towards left)
         isEdgeSwipeCandidate = touchStartX >= screenWidth - EDGE_THRESHOLD;
       }
     };
@@ -123,7 +136,6 @@ export const MobileBackButtonHandler = () => {
       const deltaX = touch.clientX - touchStartX;
       const deltaY = touch.clientY - touchStartY;
 
-      // Ensure gesture is predominantly horizontal
       if (Math.abs(deltaY) > MAX_VERTICAL_DEVIATION) return;
 
       if (!isRTL) {
@@ -143,11 +155,13 @@ export const MobileBackButtonHandler = () => {
     return () => {
       (window as any).__handleAppBack = undefined;
       document.removeEventListener('backbutton', onDocBackButton);
-      if (removeCapListener) removeCapListener();
+      if (backListener) {
+        backListener.remove();
+      }
       window.removeEventListener('touchstart', onTouchStart);
       window.removeEventListener('touchend', onTouchEnd);
     };
-  }, [location.pathname, navigate, language]);
+  }, [navigate]);
 
   return null;
 };

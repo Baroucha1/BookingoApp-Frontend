@@ -56,15 +56,13 @@ const AgencyLayout = () => {
         }`}
       >
         {/* Branding */}
-        <div className="p-5 border-b border-sidebar-border flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-gradient-accent flex items-center justify-center shadow-elegant">
-            <Plane className="w-5 h-5 text-sidebar-primary-foreground -rotate-45" />
-          </div>
+        <div className="p-4 border-b border-sidebar-border flex items-center gap-3">
+          <img src="/chart/SYMBOLE APPLI.png" alt="BookinGO" className="w-9 h-9 object-contain rounded-xl shadow-xs" />
           <div className="leading-tight">
             <div className="font-bold text-base tracking-tight text-sidebar-foreground">
-              VIS<span className="text-sidebar-primary">AGO</span>
+              Bookin<span className="text-[#FFAA01]">GO</span>
             </div>
-            <div className="text-[10px] uppercase tracking-wider text-sidebar-foreground/60">Agency Portal</div>
+            <div className="text-[10px] uppercase tracking-wider text-sidebar-foreground/60 font-medium">Agency Portal</div>
           </div>
         </div>
 

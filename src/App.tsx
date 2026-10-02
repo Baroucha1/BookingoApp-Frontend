@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { HashRouter, BrowserRouter, Outlet, Route, Routes, useLocation } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
+import { App as CapApp } from "@capacitor/app";
 import { SplashScreen } from "@capacitor/splash-screen";
 import { ThemeProvider } from "next-themes";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -23,6 +24,7 @@ import MobileBackButtonHandler from "@/components/MobileBackButtonHandler";
 import KeyboardManager from "@/components/common/KeyboardManager";
 import StatusBarManager from "@/components/common/StatusBarManager";
 import OfflineBanner from "@/components/common/OfflineBanner";
+import VideoSplashScreen from "@/components/common/VideoSplashScreen";
 import AdminLayout from "./pages/admin/AdminLayout";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import VisaTypesAdmin from "./pages/admin/VisaTypesAdmin";
@@ -104,6 +106,12 @@ const RouterComponent = Capacitor.isNativePlatform() ? HashRouter : BrowserRoute
 
 const NativeReadyNotifier = () => {
   useEffect(() => {
+    // If running in HashRouter mode on native platform with a direct pathname
+    if (Capacitor.isNativePlatform() && window.location.pathname && window.location.pathname !== '/' && (!window.location.hash || window.location.hash === '#/')) {
+      const fullPath = window.location.pathname + window.location.search;
+      window.location.replace(`/#${fullPath}`);
+    }
+
     const hideSplash = async () => {
       try {
         if (Capacitor.isNativePlatform()) {
@@ -120,7 +128,26 @@ const NativeReadyNotifier = () => {
     // Keep cold start active until the initial page has finished rendering
     const timer = setTimeout(hideSplash, 400);
 
-    return () => clearTimeout(timer);
+    // Listen for custom scheme app opens (e.g. bookingo://visa or bookingo://satim/result)
+    const appUrlListener = CapApp.addListener('appUrlOpen', (event) => {
+      try {
+        const raw = event.url || '';
+        const clean = raw.replace(/^bookingo:\/\/?/, '/');
+        if (clean) {
+          const target = clean.startsWith('/') ? clean : `/${clean}`;
+          if (Capacitor.isNativePlatform()) {
+            window.location.hash = `#${target}`;
+          } else {
+            window.location.href = target;
+          }
+        }
+      } catch {}
+    });
+
+    return () => {
+      clearTimeout(timer);
+      appUrlListener.then(l => l.remove()).catch(() => {});
+    };
   }, []);
 
   return null;
@@ -224,6 +251,7 @@ const Application = () => (
             <Sonner />
             {/*<ComingSoonGate>*/}
             <RouterComponent>
+              <VideoSplashScreen />
               <NativeReadyNotifier />
               <ScrollToTop />
               <MobileBackButtonHandler />

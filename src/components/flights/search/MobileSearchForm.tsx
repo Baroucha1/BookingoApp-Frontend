@@ -143,6 +143,7 @@ export default function MobileSearchForm({ onSubmit, loading }: { onSubmit: (p: 
                                                 )}
                                             </div>
                                             <AirportInput
+                                                label={`${t.from} ${i + 1}`}
                                                 value={leg.origin}
                                                 selectedAirport={leg.originAirport ?? null}
                                                 onChange={(code, a) => f.updateLeg(i, { origin: code, originAirport: a ?? null })}
@@ -163,6 +164,7 @@ export default function MobileSearchForm({ onSubmit, loading }: { onSubmit: (p: 
                                                 )}
                                             </div>
                                             <AirportInput
+                                                label={`${t.to} ${i + 1}`}
                                                 value={leg.destination}
                                                 selectedAirport={leg.destinationAirport ?? null}
                                                 onChange={(code, a) => f.updateLeg(i, { destination: code, destinationAirport: a ?? null })}
@@ -219,6 +221,7 @@ export default function MobileSearchForm({ onSubmit, loading }: { onSubmit: (p: 
                                         )}
                                     </div>
                                     <AirportInput
+                                        label={t.from}
                                         value={f.p.departVol1} selectedAirport={f.depAirport}
                                         onChange={(code, a) => { f.update({ departVol1: code }); f.setDepAirport(a ?? null); }}
                                         placeholder={t.fromPlaceholder}
@@ -240,6 +243,7 @@ export default function MobileSearchForm({ onSubmit, loading }: { onSubmit: (p: 
                                         )}
                                     </div>
                                     <AirportInput
+                                        label={t.to}
                                         value={f.p.destinationVol1} selectedAirport={f.destAirport}
                                         onChange={(code, a) => { f.update({ destinationVol1: code }); f.setDestAirport(a ?? null); }}
                                         placeholder={t.toPlaceholder}

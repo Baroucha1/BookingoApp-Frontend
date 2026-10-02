@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { confirmCustomSatimPayment, type SatimConfirmResult } from '@/service/payment.service';
+import { redirectToApp } from '@/lib/satimRedirect';
 import AppLoading from '@/components/common/AppLoading';
 
 type ResultState = 'loading' | 'success' | 'failed' | 'error';
@@ -77,7 +78,7 @@ export default function SatimCustomResult() {
                         </div>
                         <Button
                             className="w-full bg-gradient-primary text-white"
-                            onClick={() => navigate('/client/custom-payments')}
+                            onClick={() => redirectToApp(navigate, '/client/custom-payments')}
                         >
                             Retour à mes paiements
                         </Button>
@@ -95,14 +96,14 @@ export default function SatimCustomResult() {
                             <Button
                                 variant="outline"
                                 className="flex-1"
-                                onClick={() => navigate('/client/custom-payments')}
+                                onClick={() => redirectToApp(navigate, '/client/custom-payments')}
                             >
                                 Retour
                             </Button>
                             {paymentId && (
                                 <Button
                                     className="flex-1 bg-gradient-primary text-white"
-                                    onClick={() => navigate(`/client/custom-payments/${paymentId}/pay`)}
+                                    onClick={() => redirectToApp(navigate, `/client/custom-payments/${paymentId}/pay`)}
                                 >
                                     Réessayer
                                 </Button>

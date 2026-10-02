@@ -107,9 +107,13 @@ const ReceiptPDF = () => {
             <div className="max-w-xl mx-auto bg-white border border-gray-200 rounded-2xl shadow-md overflow-hidden print:shadow-none print:rounded-none print:border-none">
 
                 {/* ── En-tête ── */}
-                <div className="px-6 pt-6 pb-4 border-b border-gray-100">
-                    <p className="text-lg font-bold text-gray-800">BOOKINGO VISA – Reçu de paiement</p>
-                    <p className="text-xs text-gray-400 mt-0.5">Powered by SATIM I-PAY</p>
+                <div className="px-6 pt-6 pb-4 border-b border-gray-100 flex items-center justify-between">
+                    <div>
+                        <img src="/chart/LOGO_BOOKINGO.png" alt="BookinGO" className="h-7 w-auto object-contain mb-1.5" />
+                        <p className="text-xs font-semibold text-gray-700">Reçu de paiement officiel</p>
+                        <p className="text-[11px] text-gray-400">Powered by SATIM I-PAY</p>
+                    </div>
+                    <img src="/chart/SYMBOLE.png" alt="BookinGO" className="h-10 w-auto object-contain opacity-85" />
                 </div>
 
                 {/* ── Section paiement SATIM ── */}
