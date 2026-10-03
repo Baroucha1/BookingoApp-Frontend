@@ -297,9 +297,9 @@ export default function AggregatedFlightBooking() {
     }
 
     const isDomestic = isDomesticAlgeria(offer);
-    const travelDate = offer.legs[0].segments[0].departure.dateTime;
+    const travelDate = offer.legs[0]?.segments?.[0]?.departure?.dateTime || offer.legs[0]?.departureDate || '';
 
-    const defaultLoyaltyAirline = offer.legs[0]?.segments[0]?.carrierCode ?? '';
+    const defaultLoyaltyAirline = offer.legs[0]?.segments?.[0]?.carrierCode ?? '';
 
     const passengerCounts = {
         adults: searchParams?.adults ?? (passengers.filter((p) => p.paxType === 'ADT').length || 1),

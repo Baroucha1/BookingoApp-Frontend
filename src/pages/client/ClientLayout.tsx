@@ -123,13 +123,15 @@ const ClientLayout = () => {
           <path d="M-10 110 Q 80 90, 150 130 T 290 100" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 5" />
         </svg>
 
-        <Link to="/" className="px-6 pt-7 pb-4 relative z-10 block" aria-label="BookinGO">
-          <img
-            src="/chart/LOGO_BOOKINGO.png"
-            alt="BookinGO"
-            className="h-8 w-auto object-contain brightness-0 invert drop-shadow-xs"
-          />
-          <p className="text-[11px] text-blue-100/90 mt-1 font-medium tracking-wide">Book Easy. Go Anywhere !</p>
+        <Link to="/" className="px-5 pt-6 pb-4 relative z-10 block" aria-label="BookinGO">
+          <div className="bg-white/95 backdrop-blur-md rounded-2xl px-3.5 py-2 shadow-md border border-white/40 inline-flex items-center hover:bg-white transition-all">
+            <img
+              src="/chart/LOGO_BOOKINGO.png"
+              alt="BookinGO"
+              className="h-8.5 w-auto object-contain select-none"
+            />
+          </div>
+          <p className="text-[11px] text-blue-100/90 mt-2 font-medium tracking-wide">Book Easy. Go Anywhere !</p>
         </Link>
 
         <nav className="mt-2 px-3 flex-1 overflow-y-auto relative z-10">
@@ -171,11 +173,11 @@ const ClientLayout = () => {
         >
           {/* Mobile logo */}
           <div className="flex items-center gap-2 md:hidden">
-            <Link to="/" className="flex items-center" aria-label="BookinGO">
+            <Link to="/" className="flex items-center active:scale-95 transition-transform" aria-label="BookinGO">
               <img
                 src="/chart/LOGO_BOOKINGO.png"
                 alt="BookinGO"
-                className="h-7 w-auto object-contain"
+                className="h-8.5 w-auto object-contain select-none"
               />
             </Link>
           </div>

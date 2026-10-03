@@ -140,11 +140,14 @@ const Footer = () => {
             <div className="col-span-2 md:col-span-1">
               <Link to="/" className="inline-block active:scale-95 transition-transform" aria-label="BookinGO">
                 <img
-                  src="/chart/LOGO_SLOGAN_BOOKINGO.png"
-                  alt="BookinGO - Book Easy. Go Anywhere !"
-                  className="h-12 sm:h-14 w-auto object-contain select-none"
+                  src="/chart/LOGO_BOOKINGO.png"
+                  alt="BookinGO"
+                  className="h-10 sm:h-11 w-auto object-contain select-none"
                 />
               </Link>
+              <p className="text-[12px] font-bold text-[#0865FE] tracking-wide mt-1.5">
+                Book Easy. Go Anywhere !
+              </p>
 
               <p className="text-sm mt-3 leading-relaxed max-w-xs text-gray-500">
                 {t('footerDesc') || "Votre plateforme de confiance pour l'obtention de visas électroniques, billets d'avion et séjours."}

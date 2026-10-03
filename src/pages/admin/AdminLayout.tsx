@@ -233,14 +233,13 @@ const AdminLayout = () => {
                 sidebarOpen ? 'translate-x-0' : '-translate-x-full rtl:translate-x-full'
             }`}
         >
-          {/* Branding — solid blue, same color + height as the top navbar */}
-          <div className={cn(HEADER_HEIGHT, 'px-5 flex items-center bg-[#1775FF] shrink-0')}>
-            <Link to="/" className="flex items-center">
+          {/* Branding — clean white block so logo stands out with its real colors */}
+          <div className={cn(HEADER_HEIGHT, 'px-5 flex items-center bg-white border-b border-slate-100 shrink-0')}>
+            <Link to="/" className="flex items-center active:scale-95 transition-transform" aria-label="BookinGO">
               <img
                   src="/chart/LOGO_BOOKINGO.png"
                   alt="BookinGO"
-                  style={{ width: '130px', height: 'auto' }}
-                  className="brightness-0 invert object-contain"
+                  className="h-9.5 w-auto object-contain select-none"
               />
             </Link>
           </div>

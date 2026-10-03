@@ -1254,6 +1254,116 @@ const newPassenger = (): Passenger => ({
     email: '',
 });
 
+const PREDEFINED_NATIONALITIES = [
+    'Algérienne',
+    'Française',
+    'Tunisienne',
+    'Marocaine',
+    'Espagnole',
+    'Italienne',
+    'Turque',
+    'Égyptienne',
+    'Saoudienne',
+    'Émiratie',
+    'Qatarienne',
+    'Canadienne',
+    'Américaine',
+    'Britannique',
+    'Allemande',
+    'Belge',
+    'Suisse',
+    'Afghane',
+    'Albanaise',
+    'Andorrane',
+    'Angolaise',
+    'Argentine',
+    'Arménienne',
+    'Australienne',
+    'Autrichienne',
+    'Azerbaïdjanaise',
+    'Bahreïnienne',
+    'Bangladaise',
+    'Béninoise',
+    'Biélorusse',
+    'Bosnienne',
+    'Brésilienne',
+    'Bulgare',
+    'Burkinabé',
+    'Camerounaise',
+    'Chilienne',
+    'Chinoise',
+    'Chypriote',
+    'Colombienne',
+    'Comorienne',
+    'Congolaise',
+    'Coréenne',
+    'Costaricienne',
+    'Croate',
+    'Cubaine',
+    'Danoise',
+    'Djiboutienne',
+    'Dominicaine',
+    'Éthiopienne',
+    'Finlandaise',
+    'Gabonaise',
+    'Géorgienne',
+    'Ghanéenne',
+    'Grecque',
+    'Guinéenne',
+    'Haïtienne',
+    'Hongroise',
+    'Indienne',
+    'Indonésienne',
+    'Irakienne',
+    'Iranienne',
+    'Irlandaise',
+    'Islandaise',
+    'Ivoirienne',
+    'Japonaise',
+    'Jordanienne',
+    'Kazakhe',
+    'Kényane',
+    'Koweïtienne',
+    'Libanaise',
+    'Libyenne',
+    'Luxembourgeoise',
+    'Malaisienne',
+    'Malienne',
+    'Maltaise',
+    'Mauritanienne',
+    'Mexicaine',
+    'Monégasque',
+    'Néerlandaise',
+    'Nigériane',
+    'Nigérienne',
+    'Norvégienne',
+    'Omanaise',
+    'Pakistanaise',
+    'Palestinienne',
+    'Péruvienne',
+    'Polonaise',
+    'Portugaise',
+    'Roumaine',
+    'Russe',
+    'Sénégalaise',
+    'Serbe',
+    'Singapourienne',
+    'Slovaque',
+    'Slovène',
+    'Soudanaise',
+    'Sud-africaine',
+    'Suédoise',
+    'Syrienne',
+    'Tchadienne',
+    'Tchèque',
+    'Thaïlandaise',
+    'Togolaise',
+    'Ukrainienne',
+    'Vénézuélienne',
+    'Vietnamienne',
+    'Yéménite'
+];
+
 declare global {
     interface Window {
         grecaptcha: any;
@@ -1922,6 +2032,15 @@ const Apply = () => {
             return;
         }
 
+        if (!termsAccepted) {
+            toast({
+                title: "Conditions requises",
+                description: "Veuillez accepter les conditions d'utilisation avant de payer.",
+                variant: 'destructive',
+            });
+            return;
+        }
+
         setSubmitting(true);
 
         try {
@@ -2012,6 +2131,15 @@ const Apply = () => {
                     window.location.search
                 )}`
             );
+            return;
+        }
+
+        if (!termsAccepted) {
+            toast({
+                title: "Conditions requises",
+                description: "Veuillez accepter les conditions d'utilisation avant de valider votre demande.",
+                variant: 'destructive',
+            });
             return;
         }
 
@@ -3276,38 +3404,88 @@ const Apply = () => {
                                                                                         {label}
                                                                                     </Label>
 
-                                                                                    <input
-                                                                                        type={type}
-                                                                                        value={
-                                                                                            (p as any)[
-                                                                                            field
-                                                                                            ] ?? ''
-                                                                                        }
-                                                                                        placeholder={
-                                                                                            placeholder
-                                                                                        }
-                                                                                        onChange={(
-                                                                                            e
-                                                                                        ) =>
-                                                                                            updatePax(
-                                                                                                p.id,
-                                                                                                {
-                                                                                                    [field]:
-                                                                                                        e.target
-                                                                                                            .value,
-                                                                                                }
-                                                                                            )
-                                                                                        }
-                                                                                        className={cn(
-                                                                                            'w-full h-10 rounded-xl border px-3 text-[13px] focus:outline-none focus:ring-2 focus:ring-[#0865FE]/20 focus:border-[#0865FE]',
-                                                                                            isAutofilled(
-                                                                                                p.id,
-                                                                                                field
-                                                                                            )
-                                                                                                ? 'border-emerald-300 bg-emerald-50/50'
-                                                                                                : 'border-gray-200'
-                                                                                        )}
-                                                                                    />
+                                                                                    {field === 'nationality' ? (
+                                                                                        <select
+                                                                                            value={
+                                                                                                (p as any)[field] || 'Algérienne'
+                                                                                            }
+                                                                                            onChange={(e) =>
+                                                                                                updatePax(
+                                                                                                    p.id,
+                                                                                                    {
+                                                                                                        [field]:
+                                                                                                            e.target
+                                                                                                                .value,
+                                                                                                    }
+                                                                                                )
+                                                                                            }
+                                                                                            className={cn(
+                                                                                                'w-full h-10 rounded-xl border px-3 text-[13px] bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0865FE]/20 focus:border-[#0865FE] cursor-pointer',
+                                                                                                isAutofilled(
+                                                                                                    p.id,
+                                                                                                    field
+                                                                                                )
+                                                                                                    ? 'border-emerald-300 bg-emerald-50/50'
+                                                                                                    : 'border-gray-200'
+                                                                                            )}
+                                                                                        >
+                                                                                            {!PREDEFINED_NATIONALITIES.includes(
+                                                                                                (p as any)[field]
+                                                                                            ) &&
+                                                                                                (p as any)[field] && (
+                                                                                                    <option
+                                                                                                        value={
+                                                                                                            (p as any)[field]
+                                                                                                        }
+                                                                                                    >
+                                                                                                        {(p as any)[field]}
+                                                                                                    </option>
+                                                                                                )}
+                                                                                            {PREDEFINED_NATIONALITIES.map(
+                                                                                                (nat) => (
+                                                                                                    <option
+                                                                                                        key={nat}
+                                                                                                        value={nat}
+                                                                                                    >
+                                                                                                        {nat}
+                                                                                                    </option>
+                                                                                                )
+                                                                                            )}
+                                                                                        </select>
+                                                                                    ) : (
+                                                                                        <input
+                                                                                            type={type}
+                                                                                            value={
+                                                                                                (p as any)[
+                                                                                                    field
+                                                                                                ] ?? ''
+                                                                                            }
+                                                                                            placeholder={
+                                                                                                placeholder
+                                                                                            }
+                                                                                            onChange={(
+                                                                                                e
+                                                                                            ) =>
+                                                                                                updatePax(
+                                                                                                    p.id,
+                                                                                                    {
+                                                                                                        [field]:
+                                                                                                            e.target
+                                                                                                                .value,
+                                                                                                    }
+                                                                                                )
+                                                                                            }
+                                                                                            className={cn(
+                                                                                                'w-full h-10 rounded-xl border px-3 text-[13px] focus:outline-none focus:ring-2 focus:ring-[#0865FE]/20 focus:border-[#0865FE]',
+                                                                                                isAutofilled(
+                                                                                                    p.id,
+                                                                                                    field
+                                                                                                )
+                                                                                                    ? 'border-emerald-300 bg-emerald-50/50'
+                                                                                                    : 'border-gray-200'
+                                                                                            )}
+                                                                                        />
+                                                                                    )}
                                                                                 </div>
                                                                             )
                                                                         )}
@@ -3768,51 +3946,50 @@ const Apply = () => {
                                                     </div>
                                                 </button>
 
-                                                {paymentMethod ===
-                                                    'satim' && (
-                                                        <div className="mt-1 space-y-2.5">
+                                                <div className="mt-1 space-y-2.5">
 
-                                                            <label className="flex items-start gap-2.5 cursor-pointer p-2.5 rounded-xl bg-gray-50 border border-gray-100">
+                                                    <label className="flex items-start gap-2.5 cursor-pointer p-3 rounded-xl bg-gray-50 border border-gray-100 hover:bg-gray-100/60 transition-colors">
 
-                                                                <input
-                                                                    type="checkbox"
-                                                                    checked={
-                                                                        termsAccepted
-                                                                    }
-                                                                    onChange={(e) =>
-                                                                        setTermsAccepted(
-                                                                            e.target.checked
-                                                                        )
-                                                                    }
-                                                                    className="mt-0.5 w-4 h-4 accent-[#0865FE] rounded shrink-0"
-                                                                />
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={
+                                                                termsAccepted
+                                                            }
+                                                            onChange={(e) =>
+                                                                setTermsAccepted(
+                                                                    e.target.checked
+                                                                )
+                                                            }
+                                                            className="mt-0.5 w-4 h-4 accent-[#0865FE] rounded shrink-0 cursor-pointer"
+                                                        />
 
-                                                                <span className="text-[11px] text-gray-600 leading-snug">
-                                                                    J'accepte les{' '}
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={(e) => {
-                                                                            e.preventDefault();
-                                                                            setShowConditions(
-                                                                                true
-                                                                            );
-                                                                        }}
-                                                                        className="font-bold text-[#0865FE] hover:underline"
-                                                                    >
-                                                                        conditions d'utilisation
-                                                                    </button>
-                                                                    .
-                                                                </span>
+                                                        <span className="text-[11px] text-gray-600 leading-snug select-none">
+                                                            J'accepte les{' '}
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.preventDefault();
+                                                                    setShowConditions(
+                                                                        true
+                                                                    );
+                                                                }}
+                                                                className="font-bold text-[#0865FE] hover:underline cursor-pointer"
+                                                            >
+                                                                conditions d'utilisation
+                                                            </button>
+                                                            {paymentMethod === 'satim'
+                                                                ? ' et les conditions de paiement en ligne.'
+                                                                : ' de la demande.'}
+                                                        </span>
 
-                                                            </label>
+                                                    </label>
 
-                                                            {!skipRecaptcha && (
-                                                                <div className="flex justify-center scale-75 origin-left overflow-hidden">
-                                                                    <div ref={recaptchaRef} />
-                                                                </div>
-                                                            )}
+                                                    {paymentMethod === 'satim' && !skipRecaptcha && (
+                                                        <div className="flex justify-center scale-75 origin-left overflow-hidden">
+                                                            <div ref={recaptchaRef} />
                                                         </div>
                                                     )}
+                                                </div>
                                             </div>
                                         </div>
 
@@ -3938,7 +4115,7 @@ const Apply = () => {
                                         !termsAccepted ||
                                         (!skipRecaptcha && !captchaVerified)
                                     }
-                                    className="text-white font-bold rounded-full px-6 h-11 shadow-md shadow-[#0865FE]/30 bg-[#0865FE] hover:bg-blue-700 disabled:opacity-50 transition-all w-full sm:w-auto text-xs sm:text-sm"
+                                    className="text-white font-bold rounded-full px-6 h-11 shadow-md shadow-[#0865FE]/30 bg-[#0865FE] hover:bg-[#0652D0] disabled:opacity-50 transition-all w-full sm:w-auto text-xs sm:text-sm cursor-pointer disabled:cursor-not-allowed"
                                 >
                                     {submitting ? (
                                         <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
@@ -3955,8 +4132,8 @@ const Apply = () => {
 
                                 <Button
                                     onClick={handlePayAgence}
-                                    disabled={submitting}
-                                    className="text-white font-bold rounded-full px-6 h-11 shadow-md shadow-[#0865FE]/30 bg-[#0865FE] hover:bg-blue-700 disabled:opacity-50 transition-all w-full sm:w-auto text-xs sm:text-sm"
+                                    disabled={submitting || !termsAccepted}
+                                    className="text-white font-bold rounded-full px-6 h-11 shadow-md shadow-[#0865FE]/30 bg-[#0865FE] hover:bg-[#0652D0] disabled:opacity-50 transition-all w-full sm:w-auto text-xs sm:text-sm cursor-pointer disabled:cursor-not-allowed"
                                 >
                                     {submitting ? (
                                         <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />

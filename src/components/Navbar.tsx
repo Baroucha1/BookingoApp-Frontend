@@ -127,12 +127,7 @@ const Navbar = () => {
             <img
               src="/chart/LOGO_BOOKINGO.png"
               alt="BookinGO"
-              className={cn(
-                "h-7 sm:h-8 w-auto object-contain transition-all",
-                (isTransparentAndDark || isHotelSection)
-                  ? "brightness-0 invert drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]"
-                  : "drop-shadow-xs"
-              )}
+              className="h-8 sm:h-9.5 md:h-10 w-auto object-contain select-none drop-shadow-xs"
             />
           </Link>
 

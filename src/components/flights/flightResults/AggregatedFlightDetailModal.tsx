@@ -82,6 +82,7 @@ function FlightLegCard({
     leg, 
     legIdx, 
     totalLegs, 
+    isRoundTrip,
     airlineName, 
     airlineCode, 
     cabinName 
@@ -89,13 +90,15 @@ function FlightLegCard({
     leg: DisplayLeg; 
     legIdx: number; 
     totalLegs: number; 
+    isRoundTrip: boolean;
     airlineName: string; 
     airlineCode: string; 
     cabinName?: string | null; 
 }) {
-    const isRoundTrip = totalLegs === 2;
-    const legTitle = legIdx === 0 ? 'Vol Aller' : (legIdx === 1 ? 'Vol Retour' : `Vol ${legIdx + 1}`);
-    const isOutbound = legIdx === 0;
+    const legTitle = isRoundTrip
+        ? (legIdx === 0 ? 'Vol Aller' : 'Vol Retour')
+        : (totalLegs === 1 ? 'Vol' : `Vol ${legIdx + 1} • ${leg.originAirport} → ${leg.destinationAirport}`);
+    const isOutbound = isRoundTrip && legIdx === 0;
 
     const firstSegment = leg.segments[0];
     const depDateStr = leg.departureDate || firstSegment?.departure?.dateTime;
@@ -107,7 +110,9 @@ function FlightLegCard({
                 <div className="flex items-center gap-2.5">
                     <span className={cn(
                         'w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs shadow-xs shrink-0',
-                        isOutbound ? 'bg-[#3566E3] text-white' : 'bg-[#FFAA01] text-slate-900'
+                        isRoundTrip
+                            ? (isOutbound ? 'bg-[#3566E3] text-white' : 'bg-[#FFAA01] text-slate-900')
+                            : 'bg-[#0865FE] text-white'
                     )}>
                         {isOutbound ? <PlaneTakeoff className="w-4 h-4" /> : <PlaneLanding className="w-4 h-4" />}
                     </span>
@@ -386,22 +391,33 @@ export default function AggregatedFlightDetailModal({ open, onOpenChange, group,
                                 </h3>
                             </div>
                             <span className="text-xs text-slate-500 font-medium">
-                                {active.legs.length === 2 ? 'Aller & Retour' : `${active.legs.length} trajet(s)`}
+                                {active.legs.length === 2 &&
+                                active.legs[0].originAirport === active.legs[1].destinationAirport &&
+                                active.legs[0].destinationAirport === active.legs[1].originAirport
+                                    ? 'Aller & Retour'
+                                    : `${active.legs.length} vol(s) (Multi-destinations)`}
                             </span>
                         </div>
 
                         {/* Each flight leg has its single unified merged card */}
-                        {active.legs.map((leg, legIdx) => (
-                            <FlightLegCard
-                                key={leg.originDestId || legIdx}
-                                leg={leg}
-                                legIdx={legIdx}
-                                totalLegs={active.legs.length}
-                                airlineName={active.airlineName}
-                                airlineCode={active.airlineCode}
-                                cabinName={active.cabinName}
-                            />
-                        ))}
+                        {active.legs.map((leg, legIdx) => {
+                            const isRoundTrip = active.legs.length === 2 &&
+                                active.legs[0].originAirport === active.legs[1].destinationAirport &&
+                                active.legs[0].destinationAirport === active.legs[1].originAirport;
+
+                            return (
+                                <FlightLegCard
+                                    key={leg.originDestId || legIdx}
+                                    leg={leg}
+                                    legIdx={legIdx}
+                                    totalLegs={active.legs.length}
+                                    isRoundTrip={isRoundTrip}
+                                    airlineName={active.airlineName}
+                                    airlineCode={active.airlineCode}
+                                    cabinName={active.cabinName}
+                                />
+                            );
+                        })}
                     </div>
 
                     {/* 2. APRÈS : CONDITIONS */}

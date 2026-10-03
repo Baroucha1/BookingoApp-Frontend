@@ -1,4 +1,6 @@
 import { Plane } from 'lucide-react';
+import { Lottie } from 'lottie-react';
+import loadingAnimation from '@/components/common/loadingAnimation';
 
 interface Props {
     origin?: string;
@@ -10,13 +12,17 @@ export default function FlightSearchLoadingOverlay({ origin, destination, active
     if (!active) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white/40 dark:bg-[#0B0F2E]/60 backdrop-blur-md px-4 select-none animate-in fade-in duration-200">
-            <div className="flex flex-col items-center justify-center gap-3.5 text-center">
-                {/* Cercle BookinGO (Bleu #0865FE et Or #FFAA01) */}
-                <div className="relative w-12 h-12 flex items-center justify-center">
-                    <div className="absolute inset-0 rounded-full border-[3px] border-slate-200/60 dark:border-white/10" />
-                    <div className="w-12 h-12 rounded-full border-[3px] border-transparent border-t-[#0865FE] border-r-[#0865FE] bookingo-circle-spinner" />
-                    <Plane className="w-5 h-5 text-[#0865FE] absolute -rotate-45" />
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white/75 dark:bg-[#0B0F2E]/75 backdrop-blur-md px-4 select-none animate-in fade-in duration-200">
+            <div className="flex flex-col items-center justify-center gap-2 text-center">
+                {/* Lottie Animation BookinGO */}
+                <div className="w-52 h-64 sm:w-60 sm:h-76 flex items-center justify-center">
+                    <Lottie
+                        src={loadingAnimation}
+                        loop={true}
+                        autoplay={true}
+                        className="w-full h-full"
+                        rendererSettings={{ preserveAspectRatio: 'xMidYMid meet' }}
+                    />
                 </div>
 
                 {/* Itinéraire épuré si disponible */}

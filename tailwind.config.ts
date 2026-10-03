@@ -61,7 +61,7 @@ export default {
         },
         brand: {
           border: "#1775FF",
-          blue: "#0F2D6A",
+          blue: "#0865FE",
           gold: "#FFAA01",
         },
         sidebar: {

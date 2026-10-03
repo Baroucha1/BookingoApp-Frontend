@@ -77,7 +77,8 @@ export const ResultsHero = ({ onSubmit, loading, initialParams, currentStep = 'r
         onSubmit(params);
     }
 
-    const isRoundTrip = Boolean(initialParams?.returnDate);
+    const isMultiCity = Boolean(initialParams?.legs && initialParams.legs.length > 0);
+    const isRoundTrip = !isMultiCity && Boolean(initialParams?.returnDate);
     const pax = getPassengerSummary(initialParams);
     const cabin = getCabinLabel(initialParams?.cabinClass);
     const departureDateStr = formatFlightDate(initialParams?.date, true);
@@ -172,32 +173,51 @@ export const ResultsHero = ({ onSubmit, loading, initialParams, currentStep = 'r
                                 {/* Mobile (< sm) : 2 lignes ultra-propres et compactes */}
                                 <div className="sm:hidden flex flex-col justify-center">
                                     <div className="flex items-center gap-1.5 min-w-0">
-                                        <span className="font-bold text-sm text-[#002161] dark:text-white truncate">
-                                            {initialParams?.origin ?? '—'}
-                                        </span>
-                                        <span className="text-slate-300 dark:text-slate-600 font-bold">→</span>
-                                        <span className="font-bold text-sm text-[#002161] dark:text-white truncate">
-                                            {initialParams?.destination ?? '—'}
-                                        </span>
-                                        {isRoundTrip ? (
-                                            <span className="shrink-0 text-[10px] font-bold px-1.5 py-0.2 rounded bg-blue-50 text-[#0454E8] dark:bg-blue-950/60 dark:text-blue-300">
-                                                A/R
-                                            </span>
+                                        {isMultiCity ? (
+                                            <>
+                                                <span className="font-bold text-sm text-[#002161] dark:text-white truncate">
+                                                    {initialParams?.legs?.map(l => l.origin).join(' → ') + ' → ' + (initialParams?.legs?.[initialParams.legs.length - 1]?.destination || '')}
+                                                </span>
+                                                <span className="shrink-0 text-[10px] font-bold px-1.5 py-0.2 rounded bg-blue-50 text-[#0865FE] dark:bg-blue-950/60 dark:text-blue-300">
+                                                    {initialParams?.legs?.length} vols
+                                                </span>
+                                            </>
                                         ) : (
-                                            <span className="shrink-0 text-[10px] font-medium px-1.5 py-0.2 rounded bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-                                                Simple
-                                            </span>
+                                            <>
+                                                <span className="font-bold text-sm text-[#002161] dark:text-white truncate">
+                                                    {initialParams?.origin ?? '—'}
+                                                </span>
+                                                <span className="text-slate-300 dark:text-slate-600 font-bold">→</span>
+                                                <span className="font-bold text-sm text-[#002161] dark:text-white truncate">
+                                                    {initialParams?.destination ?? '—'}
+                                                </span>
+                                                {isRoundTrip ? (
+                                                    <span className="shrink-0 text-[10px] font-bold px-1.5 py-0.2 rounded bg-blue-50 text-[#0454E8] dark:bg-blue-950/60 dark:text-blue-300">
+                                                        A/R
+                                                    </span>
+                                                ) : (
+                                                    <span className="shrink-0 text-[10px] font-medium px-1.5 py-0.2 rounded bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                                                        Simple
+                                                    </span>
+                                                )}
+                                            </>
                                         )}
                                     </div>
 
                                     <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 truncate font-medium">
                                         <span className="flex items-center gap-1 shrink-0 text-slate-700 dark:text-slate-200">
                                             <Calendar className="w-3 h-3 text-[#3566E3] shrink-0" />
-                                            <span>{departureDateStr}</span>
-                                            {isRoundTrip && (
+                                            {isMultiCity ? (
+                                                <span>Multi-destinations ({initialParams?.legs?.length} vols)</span>
+                                            ) : (
                                                 <>
-                                                    <span className="text-slate-400">→</span>
-                                                    <span>{returnDateStr}</span>
+                                                    <span>{departureDateStr}</span>
+                                                    {isRoundTrip && (
+                                                        <>
+                                                            <span className="text-slate-400">→</span>
+                                                            <span>{returnDateStr}</span>
+                                                        </>
+                                                    )}
                                                 </>
                                             )}
                                         </span>
@@ -216,16 +236,28 @@ export const ResultsHero = ({ onSubmit, loading, initialParams, currentStep = 'r
                                     <div className="min-w-0">
                                         <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1">
                                             <span>Trajet</span>
-                                            {isRoundTrip && (
+                                            {isMultiCity ? (
+                                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-blue-50 text-[#0865FE] dark:bg-blue-950/60 dark:text-blue-300">
+                                                    Multi-destinations ({initialParams?.legs?.length} vols)
+                                                </span>
+                                            ) : isRoundTrip ? (
                                                 <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-blue-50 text-[#0454E8] dark:bg-blue-950/60 dark:text-blue-300">
                                                     A/R
                                                 </span>
-                                            )}
+                                            ) : null}
                                         </p>
                                         <p className="text-sm lg:text-base font-black text-[#002161] dark:text-white truncate flex items-center gap-1.5">
-                                            <span>{initialParams?.origin ?? '—'}</span>
-                                            <span className="text-slate-300 dark:text-slate-600 font-normal">→</span>
-                                            <span>{initialParams?.destination ?? '—'}</span>
+                                            {isMultiCity ? (
+                                                <span>
+                                                    {initialParams?.legs?.map(l => l.origin).join(' → ') + ' → ' + (initialParams?.legs?.[initialParams.legs.length - 1]?.destination || '')}
+                                                </span>
+                                            ) : (
+                                                <>
+                                                    <span>{initialParams?.origin ?? '—'}</span>
+                                                    <span className="text-slate-300 dark:text-slate-600 font-normal">→</span>
+                                                    <span>{initialParams?.destination ?? '—'}</span>
+                                                </>
+                                            )}
                                         </p>
                                     </div>
 
@@ -235,17 +267,23 @@ export const ResultsHero = ({ onSubmit, loading, initialParams, currentStep = 'r
                                     <div className="min-w-0">
                                         <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1">
                                             <Calendar className="w-3 h-3 text-[#3566E3]" />
-                                            <span>{isRoundTrip ? 'Dates (Aller - Retour)' : 'Date départ'}</span>
+                                            <span>{isMultiCity ? 'Itinéraire' : isRoundTrip ? 'Dates (Aller - Retour)' : 'Date départ'}</span>
                                         </p>
                                         <p className="text-xs lg:text-sm font-bold text-[#002161] dark:text-white truncate flex items-center gap-1.5">
-                                            <span className="capitalize">{departureDateStr}</span>
-                                            {isRoundTrip ? (
-                                                <>
-                                                    <span className="text-slate-400 font-normal mx-0.5">au</span>
-                                                    <span className="capitalize">{returnDateStr}</span>
-                                                </>
+                                            {isMultiCity ? (
+                                                <span>{initialParams?.legs?.length} vols successifs</span>
                                             ) : (
-                                                <span className="text-slate-400 font-normal ml-1">(Aller simple)</span>
+                                                <>
+                                                    <span className="capitalize">{departureDateStr}</span>
+                                                    {isRoundTrip ? (
+                                                        <>
+                                                            <span className="text-slate-400 font-normal mx-0.5">au</span>
+                                                            <span className="capitalize">{returnDateStr}</span>
+                                                        </>
+                                                    ) : (
+                                                        <span className="text-slate-400 font-normal ml-1">(Aller simple)</span>
+                                                    )}
+                                                </>
                                             )}
                                         </p>
                                     </div>

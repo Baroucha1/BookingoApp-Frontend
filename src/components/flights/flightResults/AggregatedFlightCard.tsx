@@ -23,11 +23,18 @@ function formatShortDate(dateStr?: string) {
 export default function AggregatedFlightCard({ offer, onSelect, fareCount }: Props) {
     const multiLeg = offer.legs.length > 1;
 
-    const legLabel = (legIdx: number) => {
-        if (offer.legs.length === 2) {
+    const isRoundTrip = offer.legs.length === 2 &&
+        offer.legs[0].originAirport === offer.legs[1].destinationAirport &&
+        offer.legs[0].destinationAirport === offer.legs[1].originAirport;
+
+    const legLabel = (legIdx: number, leg: (typeof offer.legs)[number]) => {
+        if (isRoundTrip) {
             return legIdx === 0 ? 'Aller' : 'Retour';
         }
-        return legIdx === 0 ? 'Aller' : `Vol ${legIdx + 1}`;
+        if (offer.legs.length === 1) {
+            return 'Vol';
+        }
+        return `Vol ${legIdx + 1} • ${leg.originAirport} → ${leg.destinationAirport}`;
     };
 
     return (
@@ -65,7 +72,7 @@ export default function AggregatedFlightCard({ offer, onSelect, fareCount }: Pro
                     </div>
                 </div>
 
-                {/* Itinerary panel: stacked legs (Aller on top, Retour underneath) */}
+                {/* Itinerary panel: stacked legs (Aller on top, Retour underneath, or each flight individually for multi-city) */}
                 <div className="flex-1 min-w-0 space-y-3">
                     {offer.legs.map((leg, i) => {
                         const legDate = leg.departureDate || leg.segments[0]?.departure?.dateTime;
@@ -74,7 +81,7 @@ export default function AggregatedFlightCard({ offer, onSelect, fareCount }: Pro
                                 key={leg.originDestId || i}
                                 className={cn(
                                     'min-w-0',
-                                    multiLeg ? 'bg-slate-50/70 p-3 sm:p-3.5 rounded-xl border border-slate-100' : ''
+                                    multiLeg ? 'bg-slate-50/90 p-3 sm:p-3.5 rounded-xl border border-slate-200/80 shadow-2xs' : ''
                                 )}
                             >
                                 {/* Flight leg header with date */}
@@ -82,9 +89,11 @@ export default function AggregatedFlightCard({ offer, onSelect, fareCount }: Pro
                                     <div className="flex items-center gap-2">
                                         <span className={cn(
                                             'text-[10px] uppercase tracking-wider font-extrabold px-2 py-0.5 rounded-md',
-                                            i === 0 ? 'bg-blue-100/70 text-blue-700' : 'bg-amber-100/70 text-amber-800'
+                                            isRoundTrip
+                                                ? (i === 0 ? 'bg-blue-100/70 text-blue-700' : 'bg-amber-100/70 text-amber-800')
+                                                : 'bg-[#0865FE] text-white shadow-2xs'
                                         )}>
-                                            {legLabel(i)}
+                                            {legLabel(i, leg)}
                                         </span>
                                         {legDate && (
                                             <span className="flex items-center gap-1 text-[11px] font-semibold text-slate-600">

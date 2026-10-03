@@ -80,7 +80,12 @@ export default function AggregatedFlightResults() {
         [offers]
     );
 
-    const isRoundTrip = useMemo(() => offers.some((o) => o.legs.length > 1), [offers]);
+    const isRoundTrip = useMemo(() => {
+        if (lastSearchParams?.legs && lastSearchParams.legs.length > 0) return false;
+        return offers.some((o) => o.legs.length === 2 &&
+            o.legs[0].originAirport === o.legs[1].destinationAirport &&
+            o.legs[0].destinationAirport === o.legs[1].originAirport);
+    }, [offers, lastSearchParams]);
 
     const filteredGroups = visibleGroups.filter((g) =>
         offerMatchesFilters(normalizeAggregatedOffer(g.offers[0]), filters)

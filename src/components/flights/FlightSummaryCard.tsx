@@ -1,6 +1,7 @@
 // src/components/flights/FlightSummaryCard.tsx
 import { Luggage, Briefcase, RotateCcw, AlertTriangle } from 'lucide-react';
 import { getAirlineLogo } from '@/service/flights/airlines';
+import { cn } from '@/lib/utils';
 import type { DisplayOffer } from '@/service/flights_aggregator/aggregatedNormalize';
 import type { NormalizedSegment } from '@/service/flights_aggregator/aggregatedTypes';
 
@@ -35,15 +36,22 @@ function SegmentRow({ s }: { s?: NormalizedSegment }) {
   );
 }
 
-function LegBlock({ label, leg }: { label: string; leg?: DisplayOffer['legs'][number] }) {
+function LegBlock({ label, leg, isRoundTrip }: { label: string; leg?: DisplayOffer['legs'][number]; isRoundTrip?: boolean }) {
   if (!leg) return null;
   return (
       <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <span className="inline-block text-[11px] font-bold text-white uppercase tracking-wide bg-[#0865FE] px-2 py-0.5 rounded-md">
-            {label}
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
+            <span className="inline-block text-[11px] font-bold text-white uppercase tracking-wide bg-[#0865FE] px-2.5 py-0.5 rounded-md shadow-2xs">
+              {label}
+            </span>
+            {leg.departureDate && (
+              <span className="text-xs font-semibold text-slate-700">{leg.departureDate}</span>
+            )}
+          </div>
+          <span className="text-[10px] font-bold text-slate-600 bg-white/90 px-2 py-0.5 rounded border border-slate-200">
+            {leg.isDirect ? 'Direct' : leg.stopsLabel}
           </span>
-          <span className="text-sm text-slate-500">{leg.departureDate}</span>
         </div>
 
         <div className="grid grid-cols-[1fr,auto,1fr] items-center gap-3">
@@ -53,9 +61,9 @@ function LegBlock({ label, leg }: { label: string; leg?: DisplayOffer['legs'][nu
           </div>
 
           <div className="flex flex-col items-center justify-center px-2">
-            <span className="text-[11px] text-slate-400 mb-0.5">{leg.durationLabel}</span>
-            <div className="w-24 sm:w-32 h-px border-t border-dashed border-[#0865FE]/50" />
-            <span className="text-[11px] text-slate-400 mt-0.5">{leg.stopsLabel}</span>
+            <span className="text-[11px] text-slate-500 mb-0.5 font-medium">{leg.durationLabel}</span>
+            <div className="w-24 sm:w-32 h-px border-t border-dashed border-[#0865FE]/40" />
+            <span className="text-[10px] text-slate-400 mt-0.5">{leg.stopsLabel}</span>
           </div>
 
           <div className="text-right">
@@ -65,7 +73,7 @@ function LegBlock({ label, leg }: { label: string; leg?: DisplayOffer['legs'][nu
         </div>
 
         {leg.segments && leg.segments.length > 0 && (
-          <div className="space-y-1 pt-1">
+          <div className="space-y-1 pt-1 border-t border-slate-200/50">
             {leg.segments.map((s, i) => <SegmentRow key={s?.paxSegmentRefId ?? i} s={s} />)}
           </div>
         )}
@@ -88,8 +96,6 @@ export default function FlightSummaryCard({ offer, passengers }: Props) {
     );
   }
 
-  const outbound = offer.legs?.[0];
-  const inbound = offer.legs?.[1];
   const changeFee = offer.raw?.changeFee;
 
   const fallbackLeg: DisplayOffer['legs'][number] = {
@@ -107,6 +113,22 @@ export default function FlightSummaryCard({ offer, passengers }: Props) {
     segments: offer.raw?.segments ?? [],
   };
 
+  const legsToRender = offer.legs && offer.legs.length > 0 ? offer.legs : [fallbackLeg];
+
+  const isRoundTrip = legsToRender.length === 2 &&
+      legsToRender[0].originAirport === legsToRender[1].destinationAirport &&
+      legsToRender[0].destinationAirport === legsToRender[1].originAirport;
+
+  const getLegLabel = (idx: number, leg: DisplayOffer['legs'][number]) => {
+      if (isRoundTrip) {
+          return idx === 0 ? 'ALLER' : 'RETOUR';
+      }
+      if (legsToRender.length === 1) {
+          return 'VOL ALLER';
+      }
+      return `VOL ${idx + 1} • ${leg.originAirport} → ${leg.destinationAirport}`;
+  };
+
   return (
       <div className="p-5 rounded-2xl bg-[#DFECFF] shadow-sm space-y-4">
 
@@ -122,17 +144,28 @@ export default function FlightSummaryCard({ offer, passengers }: Props) {
             <div className="text-xs text-slate-400 flex items-center gap-1.5">
               {offer.cabinName ?? '—'}
               {offer.brandName && <span className="text-slate-300">· {offer.brandName}</span>}
+              {!isRoundTrip && legsToRender.length > 1 && (
+                <span className="text-[#0865FE] font-bold">· Multi-destinations ({legsToRender.length} vols)</span>
+              )}
             </div>
           </div>
         </div>
 
-        <LegBlock label="ALLER" leg={outbound || fallbackLeg} />
-
-        {inbound && (
-            <div className="pt-3 border-t border-blue-200/60">
-              <LegBlock label="RETOUR" leg={inbound} />
+        {/* Display each flight individually in its own card */}
+        <div className="space-y-3">
+          {legsToRender.map((leg, idx) => (
+            <div
+              key={leg.originDestId || idx}
+              className={cn(
+                legsToRender.length > 1
+                  ? 'p-4 rounded-xl bg-white/85 border border-blue-200/70 shadow-2xs space-y-3'
+                  : 'space-y-3'
+              )}
+            >
+              <LegBlock label={getLegLabel(idx, leg)} leg={leg} isRoundTrip={isRoundTrip} />
             </div>
-        )}
+          ))}
+        </div>
 
         <div className="flex items-center gap-4 flex-wrap pt-3 border-t border-blue-200/60">
           {offer.checkedBaggage ? (

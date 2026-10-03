@@ -109,7 +109,7 @@ const ReceiptPDF = () => {
                 {/* ── En-tête ── */}
                 <div className="px-6 pt-6 pb-4 border-b border-gray-100 flex items-center justify-between">
                     <div>
-                        <img src="/chart/LOGO_BOOKINGO.png" alt="BookinGO" className="h-7 w-auto object-contain mb-1.5" />
+                        <img src="/chart/LOGO_BOOKINGO.png" alt="BookinGO" className="h-9 w-auto object-contain mb-1.5" />
                         <p className="text-xs font-semibold text-gray-700">Reçu de paiement officiel</p>
                         <p className="text-[11px] text-gray-400">Powered by SATIM I-PAY</p>
                     </div>
