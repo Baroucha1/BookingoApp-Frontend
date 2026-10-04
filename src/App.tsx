@@ -100,6 +100,12 @@ import ProtectedRoute from "@/components/ProtectedRoute.tsx";
 import EsimSatimResult from "@/pages/Satim/EsimSatimResult.tsx";
 import AssistancePage from "@/pages/AssistancePage.tsx";
 import AboutPage from "@/pages/AboutPage.tsx";
+import HotelsApiTest from "@/pages/admin/hotels/HotelsApiTest.tsx";
+import HotelBookings from "@/pages/admin/hotels/HotelBookings.tsx";
+import ContactMessagesAdmin from "@/pages/admin/ContactMessagesAdmin.tsx";
+import ContactPage from "@/pages/ContactPage.tsx";
+import LegalInfoPage from "@/pages/LegalInfoPage.tsx";
+import CancellationPolicyPage from "@/pages/CancellationPolicyPage.tsx";
 
 const queryClient = new QueryClient();
 const RouterComponent = Capacitor.isNativePlatform() ? HashRouter : BrowserRouter;
@@ -219,6 +225,9 @@ const PublicLayout = () => {
           <Route path="/apply/:slug" element={<ApplyVisa />} />
           <Route path="/assistance" element={<SafePageTop><AssistancePage /></SafePageTop>} />
           <Route path="/about" element={<SafePageTop><AboutPage /></SafePageTop>} />
+          <Route path="/cancellation" element={<SafePageTop><CancellationPolicyPage /></SafePageTop>} />
+          <Route path="/contact" element={<SafePageTop><ContactPage /></SafePageTop>} />
+          <Route path="/legal-info" element={<SafePageTop><LegalInfoPage /></SafePageTop>} />
           <Route element={<FlightProvider><Outlet /></FlightProvider>}>
             <Route path="/flights/v2" element={<AggregatedFlightResults />} />
             <Route>
@@ -293,6 +302,9 @@ const Application = () => (
                   <Route path="images" element={<ImagesAdmin />} />
                   <Route path="esim" element={<EsimAdmin />} />
                   <Route path="client-payments" element={<CustomPaymentsAdmin />} />
+                  <Route path="hotels/test" element={<HotelsApiTest />} />
+                  <Route path="hotels/bookings" element={<HotelBookings />} />
+                  <Route path="contact-messages" element={<ContactMessagesAdmin />} />
 
                 </Route>
 

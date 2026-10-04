@@ -1,18 +1,45 @@
 import { apiUrl, getAuthHeaders } from '../_http';
-import {BookFlightResult, OrderReserveResult, PassengerInput} from "@/service/flights_aggregator/aggregatedTypes.ts";
+import { BookFlightResult, OrderReserveResult, PassengerInput } from "@/service/flights_aggregator/aggregatedTypes.ts";
+
+export interface BookFlightOptions {
+    paymentMethod?: 'agence' | 'delivery' | 'satim';
+    officeId?: string;
+    deliveryDetails?: { address: string; wilaya: string; city: string; phone: string };
+    isDomestic?: boolean;
+}
 
 export async function bookFlight(
     fareSourceCode: string,
     passengers: PassengerInput[],
     totalPrice: number,
-    paymentMethod?: 'agence' | 'delivery' | 'satim',
+    optionsOrPaymentMethod?: BookFlightOptions | 'agence' | 'delivery' | 'satim',
     officeId?: string,
     deliveryDetails?: { address: string; wilaya: string; city: string; phone: string },
 ): Promise<BookFlightResult> {
+    let payloadToSend: Record<string, any> = {
+        fareSourceCode,
+        passengers,
+        totalPrice,
+    };
+
+    if (typeof optionsOrPaymentMethod === 'object' && optionsOrPaymentMethod !== null) {
+        payloadToSend = {
+            ...payloadToSend,
+            ...optionsOrPaymentMethod,
+        };
+    } else {
+        payloadToSend = {
+            ...payloadToSend,
+            paymentMethod: optionsOrPaymentMethod,
+            officeId,
+            deliveryDetails,
+        };
+    }
+
     const res = await fetch(apiUrl('/api/Flights/book'), {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ fareSourceCode, passengers, totalPrice, paymentMethod, officeId, deliveryDetails }),
+        body: JSON.stringify(payloadToSend),
     });
 
     if (!res.ok) {
@@ -105,8 +132,7 @@ export async function bookFlight(
     };
 }
 
-// in Tk Case we  use reserve in cash cases since we have 15 min after order create to reserve the order
-
+// In TK case we use reserve for cash payments, since we have 15 min after order create to reserve the order
 export async function orderReserve(bookingId: string): Promise<OrderReserveResult> {
     const res = await fetch(apiUrl(`/api/Flights/order-reserve/${bookingId}`), {
         method: 'POST',

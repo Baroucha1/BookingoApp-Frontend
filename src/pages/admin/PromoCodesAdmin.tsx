@@ -9,291 +9,559 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Pencil, Trash2, Tag, BarChart2, User as UserIcon, Building } from 'lucide-react';
+import {
+  Plus, Pencil, Trash2, Tag, BarChart2, User as UserIcon, Building, Loader2, Stamp, Plane, Hotel,
+} from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { seedPromoCodes, seedPromoUsages, findClient, findAgency, type PromoCodeMock } from '@/lib/mockAdminData';
+import {
+  promoCodesService,
+  type PromoCode, type PromoCodeDetail, type PromoCodeInput, type PromoUsageRow,
+  type DiscountType, type PromoRole, type PromoService,
+} from '@/service/promoCodes.service';
 
-interface VisaOption { id: string; visa_type_name_fr: string; country_name_fr: string; }
+// ── Form state (numbers kept as strings so fields can be left empty) ─────────
 
-const CURRENCIES = ['EUR', 'USD', 'DA', 'MAD', 'TND'];
+type Target = 'ALL' | PromoRole;
 
-const empty: Omit<PromoCodeMock, 'id' | 'usedCount'> = {
-  code: '', discountType: 'percentage', value: 10, currency: 'EUR',
-  applicableTo: 'all', maxUses: 100, expiresAt: '', isActive: true, visaTypeIds: [],
+interface FormState {
+  code: string;
+  discountType: DiscountType;
+  discountValue: string;
+  applicableTo: Target;
+  appliesToVisa: boolean;
+  appliesToFlight: boolean;
+  appliesToHotel: boolean;
+  minAmount: string;
+  maxDiscount: string;
+  maxUses: string;
+  maxUsesPerUser: string;
+  expiresAt: string;
+  isActive: boolean;
+}
+
+const empty: FormState = {
+  code: '', discountType: 'PERCENTAGE', discountValue: '10', applicableTo: 'CLIENT',
+  appliesToVisa: true, appliesToFlight: true, appliesToHotel: true,
+  minAmount: '', maxDiscount: '', maxUses: '', maxUsesPerUser: '1',
+  expiresAt: '', isActive: true,
 };
 
+const numOrNull = (s: string) => (s.trim() === '' ? null : Number(s));
+
+const toDateInput = (iso: string | null) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+
+const toInput = (f: FormState): PromoCodeInput => ({
+  code:            f.code.trim().toUpperCase(),
+  discountType:    f.discountType,
+  discountValue:   Number(f.discountValue),
+  applicableTo:    f.applicableTo === 'ALL' ? null : f.applicableTo,
+  appliesToVisa:   f.appliesToVisa,
+  appliesToFlight: f.appliesToFlight,
+  appliesToHotel:  f.appliesToHotel,
+  minAmount:       numOrNull(f.minAmount),
+  maxDiscount:     f.discountType === 'PERCENTAGE' ? numOrNull(f.maxDiscount) : null,
+  maxUses:         numOrNull(f.maxUses),
+  maxUsesPerUser:  numOrNull(f.maxUsesPerUser),
+  // valid until the end of the selected day
+  expiresAt:       f.expiresAt ? new Date(`${f.expiresAt}T23:59:59`).toISOString() : null,
+  isActive:        f.isActive,
+});
+
+const fromPromo = (p: PromoCode): FormState => ({
+  code:            p.code,
+  discountType:    p.discountType,
+  discountValue:   String(p.discountValue),
+  applicableTo:    p.applicableTo ?? 'ALL',
+  appliesToVisa:   p.appliesToVisa,
+  appliesToFlight: p.appliesToFlight,
+  appliesToHotel:  p.appliesToHotel,
+  minAmount:       p.minAmount?.toString() ?? '',
+  maxDiscount:     p.maxDiscount?.toString() ?? '',
+  maxUses:         p.maxUses?.toString() ?? '',
+  maxUsesPerUser:  p.maxUsesPerUser?.toString() ?? '',
+  expiresAt:       toDateInput(p.expiresAt),
+  isActive:        p.isActive,
+});
+
+// ── Display helpers ───────────────────────────────────────────────────────────
+
+const formatDA = (n: number) => `${n.toLocaleString('fr-FR')} DA`;
+
+const formatDiscount = (p: PromoCode) =>
+    p.discountType === 'PERCENTAGE' ? `${p.discountValue}%` : formatDA(p.discountValue);
+
+const TARGET_LABEL: Record<Target, string> = { ALL: 'Tous', CLIENT: 'Clients', AGENCY: 'Agences' };
+
+const SERVICES = [
+  { field: 'appliesToVisa',   label: 'Visa',  icon: Stamp },
+  { field: 'appliesToFlight', label: 'Vol',   icon: Plane },
+  { field: 'appliesToHotel',  label: 'Hôtel', icon: Hotel },
+] as const;
+
+const SERVICE_LABEL: Record<PromoService, string> = { VISA: 'Visa', FLIGHT: 'Vol', HOTEL: 'Hôtel' };
+
+const USAGE_STATUS = {
+  CONSUMED: { label: 'Utilisé',  className: 'bg-green-100 text-green-800 border-green-300' },
+  RESERVED: { label: 'En cours', className: 'bg-amber-100 text-amber-800 border-amber-300' },
+  RELEASED: { label: 'Libéré',   className: 'text-muted-foreground' },
+} as const;
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
 const PromoCodesAdmin = () => {
-  const [items, setItems] = useState<PromoCodeMock[]>(seedPromoCodes);
-  const [visaOptions, setVisaOptions] = useState<VisaOption[]>([]);
-  const [form, setForm] = useState(empty);
-  const [editId, setEditId] = useState<string | null>(null);
+  const [items, setItems] = useState<PromoCode[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState<FormState>(empty);
+  const [editing, setEditing] = useState<PromoCode | null>(null);
   const [open, setOpen] = useState(false);
-  const [usageFor, setUsageFor] = useState<PromoCodeMock | null>(null);
-  const [usageRoleFilter, setUsageRoleFilter] = useState<'all' | 'client' | 'agency'>('all');
+
+  const [usageFor, setUsageFor] = useState<PromoCode | null>(null);
+  const [usageDetail, setUsageDetail] = useState<PromoCodeDetail | null>(null);
+  const [usageRows, setUsageRows] = useState<PromoUsageRow[]>([]);
+  const [usageLoading, setUsageLoading] = useState(false);
+  const [usageRoleFilter, setUsageRoleFilter] = useState<'all' | PromoRole>('all');
+
   const { toast } = useToast();
 
+  const showError = (e: unknown) =>
+      toast({ title: 'Erreur', description: (e as Error).message, variant: 'destructive' });
+
+  const set = <K extends keyof FormState>(field: K, value: FormState[K]) =>
+      setForm(f => ({ ...f, [field]: value }));
+
   useEffect(() => {
-    fetch(`${import.meta.env.VITE_API_URL}/api/visa-types/options`)
-        .then(r => r.json())
-        .then(data => { if (Array.isArray(data)) setVisaOptions(data); });
+    promoCodesService.getAll()
+        .then(setItems)
+        .catch(showError)
+        .finally(() => setLoading(false));
   }, []);
 
-  const reset = () => { setForm(empty); setEditId(null); };
+  const reset = () => { setForm(empty); setEditing(null); };
 
-  const handleSave = () => {
-    if (!form.code.trim()) { toast({ title: 'Erreur', description: 'Code requis', variant: 'destructive' }); return; }
-    const normCode = form.code.trim().toUpperCase();
-    if (items.some(i => i.code === normCode && i.id !== editId)) {
-      toast({ title: 'Erreur', description: 'Ce code existe déjà', variant: 'destructive' }); return;
+  const handleSave = async () => {
+    if (!form.code.trim()) {
+      toast({ title: 'Erreur', description: 'Code requis', variant: 'destructive' }); return;
     }
-    if (editId) {
-      setItems(prev => prev.map(i => i.id === editId ? { ...i, ...form, code: normCode } : i));
-      toast({ title: 'Code promo mis à jour' });
-    } else {
-      setItems(prev => [...prev, { id: `pc-${crypto.randomUUID()}`, ...form, code: normCode, usedCount: 0 }]);
-      toast({ title: 'Code promo créé' });
+    if (!(Number(form.discountValue) > 0)) {
+      toast({ title: 'Erreur', description: 'La valeur de réduction doit être supérieure à 0', variant: 'destructive' }); return;
     }
-    setOpen(false); reset();
+    if (!form.appliesToVisa && !form.appliesToFlight && !form.appliesToHotel) {
+      toast({ title: 'Erreur', description: 'Sélectionnez au moins un service', variant: 'destructive' }); return;
+    }
+
+    setSaving(true);
+    try {
+      const payload = toInput(form);
+      if (editing) {
+        const updated = await promoCodesService.update(editing.id, payload);
+        setItems(prev => prev.map(i => (i.id === editing.id ? updated : i)));
+        toast({ title: 'Code promo mis à jour' });
+      } else {
+        const created = await promoCodesService.create(payload);
+        setItems(prev => [created, ...prev]);
+        toast({ title: 'Code promo créé' });
+      }
+      setOpen(false); reset();
+    } catch (e) {
+      showError(e);
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleEdit = (it: PromoCodeMock) => {
-    setForm({
-      code: it.code, discountType: it.discountType, value: it.value, currency: it.currency,
-      applicableTo: it.applicableTo, maxUses: it.maxUses,
-      expiresAt: it.expiresAt ? it.expiresAt.slice(0, 10) : '',
-      isActive: it.isActive, visaTypeIds: it.visaTypeIds,
-    });
-    setEditId(it.id); setOpen(true);
+  const handleEdit = (it: PromoCode) => {
+    setForm(fromPromo(it));
+    setEditing(it);
+    setOpen(true);
   };
 
-  const handleDelete = (id: string) => {
-    if (!confirm('Supprimer ce code promo ?')) return;
-    setItems(prev => prev.filter(i => i.id !== id));
-    toast({ title: 'Code supprimé' });
+  const handleToggle = async (it: PromoCode) => {
+    try {
+      const updated = await promoCodesService.toggle(it.id);
+      setItems(prev => prev.map(i => (i.id === it.id ? updated : i)));
+    } catch (e) {
+      showError(e);
+    }
   };
 
-  const toggleVisa = (id: string) => {
-    setForm(f => ({
-      ...f,
-      visaTypeIds: f.visaTypeIds.includes(id) ? f.visaTypeIds.filter(v => v !== id) : [...f.visaTypeIds, id],
-    }));
+  const handleDelete = async (it: PromoCode) => {
+    if (!confirm(`Supprimer le code ${it.code} ?`)) return;
+    try {
+      await promoCodesService.remove(it.id);
+      setItems(prev => prev.filter(i => i.id !== it.id));
+      toast({ title: 'Code supprimé' });
+    } catch (e) {
+      showError(e); // 409 if already used → message tells the admin to deactivate instead
+    }
   };
 
-  const isExpired = (iso: string) => iso && new Date(iso) < new Date();
+  const openUsage = async (it: PromoCode) => {
+    setUsageFor(it);
+    setUsageRoleFilter('all');
+    setUsageDetail(null);
+    setUsageRows([]);
+    setUsageLoading(true);
+    try {
+      const [detail, rows] = await Promise.all([
+        promoCodesService.getById(it.id),
+        promoCodesService.getUsages(it.id),
+      ]);
+      setUsageDetail(detail);
+      setUsageRows(rows);
+    } catch (e) {
+      showError(e);
+    } finally {
+      setUsageLoading(false);
+    }
+  };
 
-  const formatDiscount = (it: PromoCodeMock) =>
-    it.discountType === 'percentage' ? `${it.value}%` : `${it.value} ${it.currency}`;
+  const isExpired = (iso: string | null) => !!iso && new Date(iso) < new Date();
+  const isExhausted = (p: PromoCode) => p.maxUses !== null && p.usedCount >= p.maxUses;
 
-  const applicableLabel = (a: PromoCodeMock['applicableTo']) =>
-    ({ agency: 'Agences', client: 'Clients', all: 'Tous' }[a]);
+  const filteredUsages = usageRows.filter(u => usageRoleFilter === 'all' || u.userType === usageRoleFilter);
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold">Codes promo</h1>
-          <p className="text-sm text-muted-foreground mt-1">Réductions applicables aux types de visa</p>
-        </div>
-        <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
-          <DialogTrigger asChild>
-            <Button><Plus className="w-4 h-4 me-2" /> Ajouter</Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader><DialogTitle>{editId ? 'Modifier' : 'Nouveau'} code promo</DialogTitle></DialogHeader>
-            <div className="space-y-4 mt-2">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label>Code</Label>
-                  <Input value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value.toUpperCase() }))} placeholder="SUMMER25" className="font-mono" />
-                </div>
-                <div className="flex items-end gap-2">
-                  <Switch checked={form.isActive} onCheckedChange={v => setForm(f => ({ ...f, isActive: v }))} />
-                  <Label>Actif</Label>
-                </div>
-              </div>
+      <div>
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-bold">Codes promo</h1>
+            <p className="text-sm text-muted-foreground mt-1">Réductions applicables aux visas, vols et hôtels</p>
+          </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <Label>Type de réduction</Label>
-                  <Select value={form.discountType} onValueChange={v => setForm(f => ({ ...f, discountType: v as PromoCodeMock['discountType'] }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="percentage">Pourcentage (%)</SelectItem>
-                      <SelectItem value="fixed">Montant fixe</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Valeur</Label>
-                  <Input type="number" min={0} value={form.value} onChange={e => setForm(f => ({ ...f, value: +e.target.value }))} />
-                </div>
-                <div>
-                  <Label>Devise</Label>
-                  <Select value={form.currency} onValueChange={v => setForm(f => ({ ...f, currency: v }))} disabled={form.discountType === 'percentage'}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>{CURRENCIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
-              </div>
+          <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
+            <DialogTrigger asChild>
+              <Button><Plus className="w-4 h-4 me-2" /> Ajouter</Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader><DialogTitle>{editing ? 'Modifier' : 'Nouveau'} code promo</DialogTitle></DialogHeader>
+              <div className="space-y-5 mt-2">
 
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <Label>Applicable à</Label>
-                  <Select value={form.applicableTo} onValueChange={v => setForm(f => ({ ...f, applicableTo: v as PromoCodeMock['applicableTo'] }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Tous</SelectItem>
-                      <SelectItem value="agency">Agences</SelectItem>
-                      <SelectItem value="client">Clients</SelectItem>
-                    </SelectContent>
-                  </Select>
+                {/* Code + active */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Code</Label>
+                    <Input
+                        value={form.code}
+                        onChange={e => set('code', e.target.value.toUpperCase())}
+                        placeholder="SUMMER25"
+                        className="font-mono"
+                        maxLength={60}
+                        disabled={!!editing && editing.usedCount > 0}
+                    />
+                    {editing && editing.usedCount > 0 && (
+                        <p className="text-xs text-muted-foreground mt-1">Un code déjà utilisé ne peut pas être renommé</p>
+                    )}
+                  </div>
+                  <div className="flex items-end gap-2 pb-2">
+                    <Switch id="promo-active" checked={form.isActive} onCheckedChange={v => set('isActive', v)} />
+                    <Label htmlFor="promo-active">Actif</Label>
+                  </div>
                 </div>
-                <div>
-                  <Label>Utilisations max</Label>
-                  <Input type="number" min={1} value={form.maxUses} onChange={e => setForm(f => ({ ...f, maxUses: +e.target.value }))} />
-                </div>
-                <div>
-                  <Label>Expire le</Label>
-                  <Input type="date" value={form.expiresAt ? form.expiresAt.slice(0, 10) : ''} onChange={e => setForm(f => ({ ...f, expiresAt: e.target.value ? `${e.target.value}T00:00:00Z` : '' }))} />
-                </div>
-              </div>
 
-              <div className="border-t pt-4">
-                <div className="flex items-center justify-between mb-2">
-                  <Label>Types de visa applicables</Label>
-                  <span className="text-xs text-muted-foreground">{form.visaTypeIds.length === 0 ? 'Tous (aucun sélectionné)' : `${form.visaTypeIds.length} sélectionné(s)`}</span>
+                {/* Discount */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <Label>Type de réduction</Label>
+                    <Select value={form.discountType} onValueChange={v => set('discountType', v as DiscountType)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="PERCENTAGE">Pourcentage (%)</SelectItem>
+                        <SelectItem value="FIXED_AMOUNT">Montant fixe (DA)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Valeur {form.discountType === 'PERCENTAGE' ? '(%)' : '(DA)'}</Label>
+                    <Input
+                        type="number" min={0} max={form.discountType === 'PERCENTAGE' ? 100 : undefined}
+                        value={form.discountValue}
+                        onChange={e => set('discountValue', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <Label>Réduction max (DA)</Label>
+                    <Input
+                        type="number" min={0}
+                        value={form.maxDiscount}
+                        onChange={e => set('maxDiscount', e.target.value)}
+                        placeholder="Illimitée"
+                        disabled={form.discountType !== 'PERCENTAGE'}
+                    />
+                  </div>
                 </div>
-                {visaOptions.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Aucun type de visa disponible</p>
-                ) : (
-                  <div className="max-h-48 overflow-y-auto rounded-md border divide-y">
-                    {visaOptions.map(v => (
-                      <label key={v.id} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/50 cursor-pointer">
-                        <Checkbox checked={form.visaTypeIds.includes(v.id)} onCheckedChange={() => toggleVisa(v.id)} />
-                        <span className="text-sm flex-1"><span className="font-medium">{v.country_name_fr}</span> — <span className="text-muted-foreground">{v.visa_type_name_fr}</span></span>
-                      </label>
+
+                {/* Services */}
+                <div>
+                  <Label>Services concernés</Label>
+                  <div className="grid grid-cols-3 gap-3 mt-2">
+                    {SERVICES.map(({ field, label, icon: Icon }) => (
+                        <label
+                            key={field}
+                            className="flex items-center gap-3 rounded-md border px-3 py-2.5 cursor-pointer hover:bg-muted/50"
+                        >
+                          <Checkbox checked={form[field]} onCheckedChange={v => set(field, v === true)} />
+                          <Icon className="w-4 h-4 text-muted-foreground" />
+                          <span className="text-sm font-medium">{label}</span>
+                        </label>
                     ))}
                   </div>
-                )}
-              </div>
+                </div>
 
-              <Button className="w-full" onClick={handleSave}>{editId ? 'Mettre à jour' : 'Créer'}</Button>
-            </div>
+                {/* Target + limits */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <Label>Applicable à</Label>
+                    <Select value={form.applicableTo} onValueChange={v => set('applicableTo', v as Target)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="CLIENT">Clients</SelectItem>
+                        <SelectItem value="AGENCY">Agences</SelectItem>
+                        <SelectItem value="ALL">Tous</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Utilisations max</Label>
+                    <Input
+                        type="number" min={editing?.usedCount || 1}
+                        value={form.maxUses}
+                        onChange={e => set('maxUses', e.target.value)}
+                        placeholder="Illimitées"
+                    />
+                  </div>
+                  <div>
+                    <Label>Max par utilisateur</Label>
+                    <Input
+                        type="number" min={1}
+                        value={form.maxUsesPerUser}
+                        onChange={e => set('maxUsesPerUser', e.target.value)}
+                        placeholder="Illimitées"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Montant minimum (DA)</Label>
+                    <Input
+                        type="number" min={0}
+                        value={form.minAmount}
+                        onChange={e => set('minAmount', e.target.value)}
+                        placeholder="Aucun"
+                    />
+                  </div>
+                  <div>
+                    <Label>Expire le</Label>
+                    <Input type="date" value={form.expiresAt} onChange={e => set('expiresAt', e.target.value)} />
+                    <p className="text-xs text-muted-foreground mt-1">Valable jusqu'à la fin de cette journée</p>
+                  </div>
+                </div>
+
+                <Button className="w-full" onClick={handleSave} disabled={saving}>
+                  {saving && <Loader2 className="w-4 h-4 me-2 animate-spin" />}
+                  {editing ? 'Mettre à jour' : 'Créer'}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
+
+        {/* ── Table ── */}
+        <Card>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Code</TableHead>
+                  <TableHead>Réduction</TableHead>
+                  <TableHead>Services</TableHead>
+                  <TableHead>Cible</TableHead>
+                  <TableHead>Utilisation</TableHead>
+                  <TableHead>Expire</TableHead>
+                  <TableHead>Statut</TableHead>
+                  <TableHead className="text-end">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                        <Loader2 className="w-5 h-5 animate-spin inline me-2" /> Chargement...
+                      </TableCell>
+                    </TableRow>
+                ) : items.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center text-muted-foreground py-8">Aucun code promo</TableCell>
+                    </TableRow>
+                ) : (
+                    items.map(it => {
+                      const expired = isExpired(it.expiresAt);
+                      const exhausted = isExhausted(it);
+                      const live = it.isActive && !expired && !exhausted;
+                      return (
+                          <TableRow key={it.id}>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Tag className="w-3.5 h-3.5 text-muted-foreground" />
+                                <span className="font-mono font-semibold">{it.code}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="secondary">{formatDiscount(it)}</Badge>
+                              {it.maxDiscount !== null && (
+                                  <div className="text-xs text-muted-foreground mt-1">max {formatDA(it.maxDiscount)}</div>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-wrap gap-1">
+                                {SERVICES.filter(s => it[s.field]).map(({ field, label }) => (
+                                    <Badge key={field} variant="outline" className="text-xs">{label}</Badge>
+                                ))}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-sm">{TARGET_LABEL[it.applicableTo ?? 'ALL']}</TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {it.usedCount} / {it.maxUses ?? '∞'}
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {it.expiresAt ? new Date(it.expiresAt).toLocaleDateString('fr-FR') : '—'}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Switch checked={it.isActive} onCheckedChange={() => handleToggle(it)} />
+                                {live
+                                    ? <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300">Actif</Badge>
+                                    : expired
+                                        ? <Badge variant="outline" className="bg-red-100 text-red-800 border-red-300">Expiré</Badge>
+                                        : exhausted
+                                            ? <Badge variant="outline" className="bg-orange-100 text-orange-800 border-orange-300">Épuisé</Badge>
+                                            : <Badge variant="outline" className="text-muted-foreground">Inactif</Badge>}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-end">
+                              <div className="flex justify-end gap-1">
+                                <Button variant="ghost" size="icon" onClick={() => openUsage(it)} title="Voir utilisations">
+                                  <BarChart2 className="w-4 h-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon" onClick={() => handleEdit(it)}>
+                                  <Pencil className="w-4 h-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon" onClick={() => handleDelete(it)}>
+                                  <Trash2 className="w-4 h-4 text-destructive" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                      );
+                    })
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+
+        {/* ── Usage dialog ── */}
+        <Dialog open={!!usageFor} onOpenChange={(o) => { if (!o) setUsageFor(null); }}>
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Utilisations — <span className="font-mono">{usageFor?.code}</span></DialogTitle>
+            </DialogHeader>
+
+            {usageLoading ? (
+                <div className="py-10 text-center text-muted-foreground">
+                  <Loader2 className="w-5 h-5 animate-spin inline me-2" /> Chargement...
+                </div>
+            ) : (
+                <div className="space-y-4 mt-2">
+                  <div className="grid grid-cols-3 gap-3">
+                    {(['CONSUMED', 'RESERVED', 'RELEASED'] as const).map(s => {
+                      const stat = usageDetail?.usage[s];
+                      return (
+                          <div key={s} className="rounded-md border p-3">
+                            <div className="text-xs text-muted-foreground">{USAGE_STATUS[s].label}</div>
+                            <div className="text-xl font-semibold">{stat?.count ?? 0}</div>
+                            {s !== 'RELEASED' && (
+                                <div className="text-xs text-muted-foreground">-{formatDA(stat?.totalDiscount ?? 0)}</div>
+                            )}
+                          </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm text-muted-foreground">{usageRows.length} utilisation(s) au total</p>
+                    <Select value={usageRoleFilter} onValueChange={v => setUsageRoleFilter(v as typeof usageRoleFilter)}>
+                      <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Tous rôles</SelectItem>
+                        <SelectItem value="CLIENT">Clients</SelectItem>
+                        <SelectItem value="AGENCY">Agences</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Utilisateur</TableHead>
+                        <TableHead>Service</TableHead>
+                        <TableHead>Montant</TableHead>
+                        <TableHead>Statut</TableHead>
+                        <TableHead>Date</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredUsages.map(u => {
+                        const Icon = u.userType === 'AGENCY' ? Building : UserIcon;
+                        return (
+                            <TableRow key={u.id}>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <Icon className="w-3.5 h-3.5 text-muted-foreground" />
+                                  <div>
+                                    <div className="text-sm font-medium">{u.userName ?? 'Invité'}</div>
+                                    {u.userEmail && <div className="text-xs text-muted-foreground">{u.userEmail}</div>}
+                                  </div>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                {u.service ? <Badge variant="outline">{SERVICE_LABEL[u.service]}</Badge> : '—'}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="secondary">-{formatDA(u.discountApplied)}</Badge>
+                                {u.originalAmount !== null && (
+                                    <div className="text-xs text-muted-foreground mt-1">sur {formatDA(u.originalAmount)}</div>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className={USAGE_STATUS[u.status].className}>
+                                  {USAGE_STATUS[u.status].label}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-sm text-muted-foreground">
+                                {new Date(u.usedAt).toLocaleDateString('fr-FR')}
+                              </TableCell>
+                            </TableRow>
+                        );
+                      })}
+                      {filteredUsages.length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={5} className="text-center text-muted-foreground py-6">Aucune utilisation</TableCell>
+                          </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+            )}
           </DialogContent>
         </Dialog>
       </div>
-
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Code</TableHead>
-                <TableHead>Réduction</TableHead>
-                <TableHead>Cible</TableHead>
-                <TableHead>Utilisation</TableHead>
-                <TableHead>Expire</TableHead>
-                <TableHead>Statut</TableHead>
-                <TableHead className="text-end">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {items.map(it => {
-                const expired = isExpired(it.expiresAt);
-                const exhausted = it.usedCount >= it.maxUses;
-                const live = it.isActive && !expired && !exhausted;
-                return (
-                  <TableRow key={it.id}>
-                    <TableCell><div className="flex items-center gap-2"><Tag className="w-3.5 h-3.5 text-muted-foreground" /><span className="font-mono font-semibold">{it.code}</span></div></TableCell>
-                    <TableCell><Badge variant="secondary">{formatDiscount(it)}</Badge></TableCell>
-                    <TableCell className="text-sm">{applicableLabel(it.applicableTo)}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{it.usedCount} / {it.maxUses}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{it.expiresAt ? new Date(it.expiresAt).toLocaleDateString('fr-FR') : '—'}</TableCell>
-                    <TableCell>
-                      {live
-                        ? <Badge className="bg-green-100 text-green-800 border-green-300" variant="outline">Actif</Badge>
-                        : expired
-                          ? <Badge variant="outline" className="bg-red-100 text-red-800 border-red-300">Expiré</Badge>
-                          : exhausted
-                            ? <Badge variant="outline" className="bg-orange-100 text-orange-800 border-orange-300">Épuisé</Badge>
-                            : <Badge variant="outline" className="text-muted-foreground">Inactif</Badge>}
-                    </TableCell>
-                    <TableCell className="text-end space-x-1">
-                      <Button variant="ghost" size="icon" onClick={() => setUsageFor(it)} title="Voir utilisations"><BarChart2 className="w-4 h-4" /></Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleEdit(it)}><Pencil className="w-4 h-4" /></Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDelete(it.id)}><Trash2 className="w-4 h-4 text-destructive" /></Button>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-              {items.length === 0 && (
-                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Aucun code promo</TableCell></TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      <Dialog open={!!usageFor} onOpenChange={(o) => { if (!o) setUsageFor(null); }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Utilisations — <span className="font-mono">{usageFor?.code}</span></DialogTitle></DialogHeader>
-          {usageFor && (() => {
-            const all = seedPromoUsages.filter(u => u.promoCodeId === usageFor.id);
-            const filtered = all.filter(u => usageRoleFilter === 'all' || u.userType === usageRoleFilter);
-            return (
-              <div className="space-y-4 mt-2">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm text-muted-foreground">{all.length} utilisation(s) au total</p>
-                  <Select value={usageRoleFilter} onValueChange={(v) => setUsageRoleFilter(v as typeof usageRoleFilter)}>
-                    <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Tous rôles</SelectItem>
-                      <SelectItem value="client">Clients</SelectItem>
-                      <SelectItem value="agency">Agences</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Utilisateur</TableHead>
-                      <TableHead>Paiement</TableHead>
-                      <TableHead>Réduction</TableHead>
-                      <TableHead>Date</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filtered.map(u => {
-                      const owner = u.userType === 'client' ? findClient(u.userId) : findAgency(u.userId);
-                      const name = owner ? ('fullName' in owner ? owner.fullName : owner.companyName) : u.userId;
-                      const Icon = u.userType === 'client' ? UserIcon : Building;
-                      return (
-                        <TableRow key={u.id}>
-                          <TableCell>
-                            <div className="flex items-center gap-2"><Icon className="w-3.5 h-3.5 text-muted-foreground" />
-                              <div>
-                                <div className="text-sm font-medium">{name}</div>
-                                <Badge variant="outline" className="text-[10px] h-4 mt-0.5">{u.userType === 'client' ? 'Client' : 'Agence'}</Badge>
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell className="font-mono text-xs">{u.paymentId}</TableCell>
-                          <TableCell><Badge variant="secondary">-{u.discountApplied} {u.currency}</Badge></TableCell>
-                          <TableCell className="text-sm text-muted-foreground">{new Date(u.date).toLocaleDateString('fr-FR')}</TableCell>
-                        </TableRow>
-                      );
-                    })}
-                    {filtered.length === 0 && (
-                      <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-6">Aucune utilisation</TableCell></TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            );
-          })()}
-        </DialogContent>
-      </Dialog>
-    </div>
   );
 };
 

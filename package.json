@@ -83,7 +83,8 @@
     "tailwindcss-animate": "^1.0.7",
     "tesseract.js": "^7.0.0",
     "vaul": "^0.9.9",
-    "zod": "^3.25.76"
+    "zod": "^3.25.76",
+    "react-leaflet": "^4.2.1"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.5.0",
@@ -110,6 +111,8 @@
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.38.0",
     "vite": "^5.4.21",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "@types/leaflet": "^1.9.22",
+    "lovable-tagger": "^1.1.13"
   }
 }

@@ -82,6 +82,7 @@ const esimLeaf: NavLeaf = { to: '/admin/esim', icon: Wifi, label: 'eSIM' };
 const parametresItems: NavLeaf[] = [
 
   { to: '/admin/client-payments', icon: CreditCard, label: 'Client Paiements' },
+  { to: '/admin/promo-codes',     icon: Tag,        label: 'Codes Promos' },
   { to: '/admin/contact-messages', icon: Mail, label: 'Messages de contact' },
   { to: '/admin/users',    icon: Users,      label: 'Utilisateurs' },
   { to: '/admin/fournisseurs',   icon: Layers,    label: 'Fournisseurs' },
@@ -90,6 +91,7 @@ const parametresItems: NavLeaf[] = [
 
 const PAGE_TITLES: Record<string, string> = {
   '/admin':                     'Tableau de bord',
+  '/admin/promo-codes':         'Codes Promos',
   '/admin/countries':           'Pays',
   '/admin/visa-types':          'Types de visa',
   '/admin/applications':        'Demandes',

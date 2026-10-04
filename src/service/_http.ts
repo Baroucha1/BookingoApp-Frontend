@@ -11,3 +11,6 @@ export function getAuthHeaders(): HeadersInit {
 export function apiUrl(path: string): string {
   return `${API_URL}${path}`;
 }
+
+export { setAppSession } from '@/lib/satimRedirect';
+

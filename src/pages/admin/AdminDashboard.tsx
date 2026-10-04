@@ -163,9 +163,9 @@ const AdminDashboard = () => {
             <p className="text-sm text-muted-foreground mt-1">Aperçu en temps réel de votre plateforme eVisa.</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Link to="/assets/admin/countries"><Button variant="outline" size="sm" className="gap-2"><MapPin className="w-4 h-4" />Ajouter un pays</Button></Link>
-            <Link to="/assets/admin/visa-types"><Button variant="outline" size="sm" className="gap-2"><Globe className="w-4 h-4" />Type de visa</Button></Link>
-            <Link to="/assets/admin/promo-codes"><Button size="sm" className="gap-2 bg-gradient-primary hover:opacity-90"><Tag className="w-4 h-4" />Code promo</Button></Link>
+            <Link to="/admin/countries"><Button variant="outline" size="sm" className="gap-2"><MapPin className="w-4 h-4" />Ajouter un pays</Button></Link>
+            <Link to="/admin/visa-types"><Button variant="outline" size="sm" className="gap-2"><Globe className="w-4 h-4" />Type de visa</Button></Link>
+            <Link to="/admin/promo-codes"><Button size="sm" className="gap-2 bg-gradient-primary hover:opacity-90"><Tag className="w-4 h-4" />Code promo</Button></Link>
           </div>
         </div>
 
