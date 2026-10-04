@@ -71,10 +71,10 @@ const PayApplication = () => {
 
     // ── Fetch application ─────────────────────────────────────────────────────
     useEffect(() => {
-        if (!applicationId || !user) return;
+        if (!applicationId) return;
         const token = localStorage.getItem('token');
         fetch(`${API}/api/applications/${applicationId}`, {
-            headers: { Authorization: `Bearer ${token}` },
+            headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         })
             .then(r => r.json())
             .then(data => {
@@ -83,7 +83,11 @@ const PayApplication = () => {
             })
             .catch(err => {
                 toast({ title: 'Erreur', description: err.message, variant: 'destructive' });
-                navigate('/client/applications');
+                if (user) {
+                    navigate('/client/applications');
+                } else {
+                    navigate('/visa');
+                }
             })
             .finally(() => setLoading(false));
     }, [applicationId, user]);

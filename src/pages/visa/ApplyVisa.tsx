@@ -58,16 +58,7 @@ const ApplyVisa = () => {
   const [uploadingKey, setUploadingKey] = useState<string | null>(null);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
-  // Redirect to login if not authenticated
-  useEffect(() => {
-    if (!loading && !user) {
-      toast({
-        title: language === 'fr' ? 'Connexion requise' : language === 'ar' ? 'يجب تسجيل الدخول' : 'Login required',
-        variant: 'destructive',
-      });
-      navigate('/login');
-    }
-  }, [user, loading, navigate, toast, language]);
+
 
   // Auto-fill account info if logged in or when token info loads
   useEffect(() => {
@@ -119,7 +110,7 @@ const ApplyVisa = () => {
   }, [user]);
 
   if (loading) return <div className="container py-20 text-center text-muted-foreground">Loading...</div>;
-  if (!user) return null;
+
 
   if (visaTypes.length === 0) {
     return (
@@ -211,7 +202,7 @@ const ApplyVisa = () => {
 
     const res = await fetch(`${import.meta.env.VITE_API_URL}/api/applications`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: form,
     });
     setSubmitting(false);
@@ -221,7 +212,11 @@ const ApplyVisa = () => {
       return;
     }
     toast({ title: t('submit'), description: language === 'fr' ? 'Demande soumise avec succès!' : 'Application submitted!' });
-    navigate('/my-visas');
+    if (user) {
+      navigate('/client/applications');
+    } else {
+      navigate('/visa');
+    }
   };
 
   const req = <span className="text-destructive ml-0.5">*</span>;

@@ -221,9 +221,31 @@ export async function initiateHotelPayment(input: InitiateHotelPaymentInput): Pr
         headers: { ...authHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify(input),
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data?.message ?? "Échec de l'initialisation du paiement");
-    return data as InitiateHotelPaymentResult; // fields at top level, not under `data`
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data?.status === 'error') {
+        const msg = (typeof data?.message === 'string' && data.message !== 'null' && data.message.trim())
+            ? data.message
+            : (typeof data?.error === 'string' && data.error !== 'null' && data.error.trim())
+            ? data.error
+            : (typeof data?.errorMessage === 'string' && data.errorMessage !== 'null' && data.errorMessage.trim())
+            ? data.errorMessage
+            : "Échec de l'initialisation du paiement";
+        throw new Error(msg);
+    }
+    const payload = (data?.data && typeof data.data === 'object') ? data.data : data;
+    const formUrl = payload?.formUrl || data?.formUrl;
+    const orderId = payload?.orderId || data?.orderId || '';
+    const bookingToken = payload?.bookingToken || data?.bookingToken || '';
+
+    if (!formUrl) {
+        throw new Error(data?.message || data?.error || "Lien de redirection bancaire SATIM indisponible");
+    }
+
+    return {
+        formUrl,
+        orderId: String(orderId),
+        bookingToken: String(bookingToken),
+    };
 }
 
 export interface ConfirmHotelPaymentInput {

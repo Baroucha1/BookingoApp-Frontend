@@ -15,10 +15,11 @@ import {
     confirmFlightSatimPayment,
     type ReceiptData,
 } from '@/service/payment.service';
+import { confirmHotelPayment } from '@/service/hotels/hotels.service';
 import { redirectToApp } from '@/lib/satimRedirect';
 
 type Status  = 'PENDING' | 'PAID' | 'FAILED';
-type PayType = 'visa' | 'flight';
+type PayType = 'visa' | 'flight' | 'hotel';
 
 const formatAmount = (amount: number | string) => `${Number(amount).toFixed(2)} DA`;
 
@@ -30,10 +31,12 @@ const SatimResult = () => {
     const type          = (searchParams.get('type') ?? 'visa') as PayType;
     const applicationId = searchParams.get('applicationId');
     const bookingId     = searchParams.get('bookingId');
-    const mainPage      = type === 'flight' ? '/flights' : '/visa';
-    const mainPageLabel = type === 'flight' ? 'vols' : 'visas';
+    const bookingToken  = searchParams.get('bt') || searchParams.get('bookingToken') || searchParams.get('token');
+    const mainPage      = type === 'flight' ? '/flights' : type === 'hotel' ? '/hotels' : '/visa';
+    const mainPageLabel = type === 'flight' ? 'vols' : type === 'hotel' ? 'hôtels' : 'visas';
 
     const [payment,      setPayment]      = useState<any>(null);
+    const [pendingMsg,   setPendingMsg]   = useState<string | null>(null);
     const [receipt,      setReceipt]      = useState<ReceiptData | null>(null);
     const [status,       setStatus]       = useState<Status>('PENDING');
     const [loading,      setLoading]      = useState(true);
@@ -91,10 +94,20 @@ const SatimResult = () => {
             return () => clearTimeout(t);
         }
 
-        const id = type === 'flight' ? bookingId : applicationId;
-        if (!id) { setError('Référence introuvable.'); setLoading(false); return; }
+        if (type === 'hotel') {
+            if (!bookingToken) { setError('Jeton de réservation introuvable.'); setLoading(false); return; }
+        } else {
+            const id = type === 'flight' ? bookingId : applicationId;
+            if (!id) { setError('Référence introuvable.'); setLoading(false); return; }
+        }
 
-        const orderId = searchParams.get('mdOrder') ?? searchParams.get('orderId');
+        const orderId =
+            searchParams.get('mdOrder') ??
+            searchParams.get('orderId') ??
+            (bookingToken ? (sessionStorage.getItem(`hotel_satim_orderId_${bookingToken}`) || localStorage.getItem(`hotel_satim_orderId_${bookingToken}`)) : null) ??
+            sessionStorage.getItem('hotel_satim_last_orderId') ??
+            localStorage.getItem('hotel_satim_last_orderId');
+
         if (!orderId) { setError('Référence de commande introuvable.'); setLoading(false); return; }
 
         let cancelled = false;
@@ -111,6 +124,25 @@ const SatimResult = () => {
                     if (cancelled) return;
                     setPayment(result.payment);
                     await handlePaid(bookingId);
+                } else if (type === 'hotel' && bookingToken) {
+                    const result = await confirmHotelPayment({ bookingToken, orderId });
+                    if (cancelled) return;
+
+                    sessionStorage.removeItem(`hotel_satim_orderId_${bookingToken}`);
+                    localStorage.removeItem(`hotel_satim_orderId_${bookingToken}`);
+
+                    if ('bookingId' in result || (result as any).status === 'pending_verification') {
+                        setStatus('PENDING');
+                        setPendingMsg((result as any).message || 'Paiement confirmé, réservation en attente de vérification auprès du fournisseur.');
+                        setLoading(false);
+                        return;
+                    }
+
+                    const bookingData = (result as any).data ?? result;
+                    setPayment({ ...bookingData.payment, booking: bookingData });
+                    setStatus('PAID');
+                    setLoading(false);
+                    fireConfetti();
                 }
             } catch (err: any) {
                 if (!cancelled) {
@@ -146,7 +178,6 @@ const SatimResult = () => {
                             variant: 'destructive',
                         });
 
-                        // Rediriger automatiquement vers la page d'origine de la requête (vols ou visa)
                         const redirectTimer = setTimeout(() => {
                             redirectToApp(navigate, mainPage, { replace: true });
                         }, 2500);
@@ -159,15 +190,19 @@ const SatimResult = () => {
 
         confirm();
         return () => { cancelled = true; };
-    }, [type, applicationId, bookingId]);
+    }, [type, applicationId, bookingId, bookingToken]);
 
-    const refId              = type === 'flight' ? bookingId : applicationId;
+    const refId              = type === 'flight' ? bookingId : type === 'hotel' ? (payment?.booking?.yourReference ?? bookingToken) : applicationId;
     const infoLabel          = type === 'flight'
         ? payment?.booking?.pnr ? `PNR: ${payment.booking.pnr}` : '—'
-        : payment?.visaApplication?.visaType?.nameFr;
+        : type === 'hotel'
+            ? (payment?.booking?.bookingReference ? `Réf: ${payment.booking.bookingReference}` : (payment?.booking?.hotelName ?? 'Hôtel'))
+            : payment?.visaApplication?.visaType?.nameFr;
     const successDescription = type === 'flight'
         ? `Vol ${payment?.booking?.departureAirport ?? ''} → ${payment?.booking?.arrivalAirport ?? ''} · PNR: ${payment?.booking?.pnr ?? '—'}`
-        : `Votre demande de visa pour ${payment?.visaApplication?.visaType?.country?.nameFr} a été soumise avec succès.`;
+        : type === 'hotel'
+            ? `Réservation confirmée — ${payment?.booking?.hotelName ?? ''}`
+            : `Votre demande de visa pour ${payment?.visaApplication?.visaType?.country?.nameFr} a été soumise avec succès.`;
 
     // ── Téléchargement PDF ────────────────────────────────────────────────────
     const handleDownload = useCallback(() => {
@@ -260,12 +295,14 @@ const SatimResult = () => {
                     <h1 className="text-2xl font-bold">
                         {status === 'PAID'    && 'Paiement confirmé'}
                         {status === 'FAILED'  && (isCancelled ? 'Paiement annulé' : 'Paiement échoué')}
-                        {status === 'PENDING' && 'Paiement en attente'}
+                        {status === 'PENDING' && (type === 'hotel' ? 'Paiement confirmé — vérification en cours' : 'Paiement en attente')}
                     </h1>
                     <p className="text-muted-foreground mt-2 text-sm">
                         {status === 'PAID'    && successDescription}
                         {status === 'FAILED'  && (errorMessage ?? (isCancelled ? `Le paiement a été annulé. Redirection vers la page des ${mainPageLabel}...` : "Votre paiement n'a pas pu être traité."))}
-                        {status === 'PENDING' && "Le statut de votre paiement n'a pas encore été mis à jour. Vérifiez dans quelques minutes."}
+                        {status === 'PENDING' && (type === 'hotel'
+                            ? (pendingMsg ?? "Votre paiement a été confirmé. Nous vérifions le statut de la réservation auprès de l'hôtel.")
+                            : "Le statut de votre paiement n'a pas encore été mis à jour. Vérifiez dans quelques minutes.")}
                     </p>
                 </div>
 
@@ -320,7 +357,7 @@ const SatimResult = () => {
                     </div>
                 )}
 
-                {/* ── Carte info paiement (vol ou reçu non chargé) ── */}
+                {/* ── Carte info paiement (vol, hôtel ou reçu non chargé) ── */}
                 {payment && !(status === 'PAID' && type === 'visa' && receipt) && (
                     <div className="bg-muted/40 rounded-xl p-5 space-y-3 text-left">
                         <div className="flex justify-between text-sm">
@@ -328,7 +365,7 @@ const SatimResult = () => {
                             <span className="font-mono font-semibold">{refId?.slice(0, 16).toUpperCase()}</span>
                         </div>
                         <div className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">{type === 'flight' ? 'Vol' : 'Visa'}</span>
+                            <span className="text-muted-foreground">{type === 'flight' ? 'Vol' : type === 'hotel' ? 'Hôtel' : 'Visa'}</span>
                             <span className="font-medium">{infoLabel}</span>
                         </div>
                         <div className="flex justify-between text-sm">
@@ -415,19 +452,29 @@ const SatimResult = () => {
                             Rechercher un vol
                         </Button>
                     </>}
+                    {(status === 'PAID' || status === 'PENDING') && type === 'hotel' && <>
+                        <Button onClick={() => redirectToApp(navigate, '/hotels')}
+                                className="text-white font-semibold rounded-full px-6 cursor-pointer"
+                                style={{ background: 'linear-gradient(135deg, #0865FE, #3B2F7E)' }}>
+                            Rechercher un hôtel
+                        </Button>
+                        <Button variant="outline" onClick={() => redirectToApp(navigate, '/')} className="rounded-full px-6 cursor-pointer">
+                            Accueil
+                        </Button>
+                    </>}
                     {status === 'FAILED' && <>
                         <Button onClick={() => redirectToApp(navigate, mainPage)}
                                 className="text-white font-semibold rounded-full px-6"
                                 style={{ background: 'linear-gradient(135deg, #0865FE, #3B2F7E)' }}>
-                            {type === 'flight' ? 'Retour aux vols' : 'Retour aux visas'}
+                            {type === 'flight' ? 'Retour aux vols' : type === 'hotel' ? 'Retour aux hôtels' : 'Retour aux visas'}
                         </Button>
                         <Button variant="outline"
-                                onClick={() => redirectToApp(navigate, type === 'flight' ? '/flights/my-bookings' : '/client/applications')}
+                                onClick={() => redirectToApp(navigate, type === 'flight' ? '/flights/my-bookings' : type === 'hotel' ? '/hotels' : '/client/applications')}
                                 className="rounded-full px-6">
-                            {type === 'flight' ? 'Mes réservations' : 'Mes demandes'}
+                            {type === 'flight' ? 'Mes réservations' : type === 'hotel' ? 'Rechercher un hôtel' : 'Mes demandes'}
                         </Button>
                     </>}
-                    {status === 'PENDING' && <>
+                    {status === 'PENDING' && type !== 'hotel' && <>
                         <Button onClick={() => redirectToApp(navigate, type === 'flight' ? '/flights/my-bookings' : '/client/applications')}
                                 className="text-white font-semibold rounded-full px-6"
                                 style={{ background: 'linear-gradient(135deg, #0865FE, #3B2F7E)' }}>

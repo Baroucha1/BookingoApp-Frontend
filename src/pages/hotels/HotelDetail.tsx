@@ -243,6 +243,7 @@ export default function HotelDetail() {
         const option = selectedRoom.bestOption;
         navigate('/hotels/checkout', {
             state: {
+                hotelId: details.id ?? (hotelId ? Number(hotelId) : undefined),
                 hotelName: details.name,
                 hotelImage: details.images?.[0] ?? null,
                 address: details.address,
@@ -250,6 +251,7 @@ export default function HotelDetail() {
                 checkInDate: params?.checkInDate,
                 checkOutDate: params?.checkOutDate,
                 option,
+                confirmedPrice: policiesByOption[option.optionId]?.price ? Number(policiesByOption[option.optionId].price) : option.totalPrice,
                 cancellationPolicy: policiesByOption[option.optionId]?.policies ?? null,
             },
         });

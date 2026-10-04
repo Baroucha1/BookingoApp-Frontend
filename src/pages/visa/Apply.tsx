@@ -1742,25 +1742,7 @@ const Apply = () => {
         paxId: string,
         reqId: string
     ) => {
-        const token = localStorage.getItem('token');
-        if (!user && !token) {
-            save();
-            toast({
-                title: 'Connexion requise',
-                description:
-                    'Connectez-vous pour finaliser votre demande.',
-                variant: 'destructive',
-            });
 
-            navigate(
-                `/login?redirect=${encodeURIComponent(
-                    window.location.pathname +
-                    window.location.search
-                )}`
-            );
-
-            return;
-        }
 
         const input = document.createElement('input');
 
@@ -2015,22 +1997,7 @@ const Apply = () => {
 
     const handlePaySatim = async () => {
         const token = localStorage.getItem('token');
-        if (!token && !user) {
-            save();
-            toast({
-                title: 'Connexion requise',
-                description:
-                    'Veuillez vous connecter pour valider et payer votre demande.',
-                variant: 'destructive',
-            });
-            navigate(
-                `/login?redirect=${encodeURIComponent(
-                    window.location.pathname +
-                    window.location.search
-                )}`
-            );
-            return;
-        }
+
 
         if (!termsAccepted) {
             toast({
@@ -2117,22 +2084,6 @@ const Apply = () => {
 
     const handlePayAgence = async () => {
         const token = localStorage.getItem('token');
-        if (!token && !user) {
-            save();
-            toast({
-                title: 'Connexion requise',
-                description:
-                    'Veuillez vous connecter pour enregistrer votre demande.',
-                variant: 'destructive',
-            });
-            navigate(
-                `/login?redirect=${encodeURIComponent(
-                    window.location.pathname +
-                    window.location.search
-                )}`
-            );
-            return;
-        }
 
         if (!termsAccepted) {
             toast({
@@ -2156,7 +2107,11 @@ const Apply = () => {
                     'Rendez-vous en agence pour finaliser le paiement.',
             });
 
-            navigate('/client/applications');
+            if (user) {
+                navigate('/client/applications');
+            } else {
+                navigate('/visa');
+            }
         } catch (err: any) {
             const rawMsg = err?.message ?? '';
             const msg = (rawMsg && rawMsg !== 'null' && rawMsg !== '[object Object]')

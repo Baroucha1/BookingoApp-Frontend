@@ -20,6 +20,7 @@ import { useLanguage } from '@/i18n/LanguageContext';
 import { setAppSession } from '@/lib/satimRedirect';
 
 interface CheckoutState {
+    hotelId?: number | string;
     hotelName: string;
     hotelImage: string | null;
     address: string;
@@ -27,6 +28,8 @@ interface CheckoutState {
     checkInDate: string;
     checkOutDate: string;
     option: SearchOption;
+    confirmedPrice?: number;
+    cancellationPolicy?: any;
 }
 
 interface AdultForm { title: 'Mr' | 'Mrs' | 'Miss' | ''; firstName: string; lastName: string; }
@@ -50,7 +53,7 @@ export default function HotelCheckout() {
     // manual add/remove, so there's no way to under-fill a slot silently. ──
     const [rooms, setRooms] = useState<RoomForm[]>(() =>
         state ? state.option.rooms.map((r) => ({
-            adults: Array.from({ length: r.numAdults }, () => ({ title: '' as const, firstName: '', lastName: '' })),
+            adults: Array.from({ length: r.numAdults }, () => ({ title: 'Mr' as const, firstName: '', lastName: '' })),
             children: Array.from({ length: r.numChildren }, () => ({ firstName: '', lastName: '' })),
         })) : []
     );
@@ -156,64 +159,107 @@ export default function HotelCheckout() {
     };
 
     const submitBooking = async () => {
-        if (!isValid) {
-            toast.error(!emailValid
-                ? t('hotelEmailRequired')
-                : t('hotelFillAllTravelers'));
+        if (!email.trim() || !emailValid) {
+            toast.error(t('hotelEmailRequired') || 'Veuillez saisir une adresse email valide');
+            return;
+        }
+        if (!travellersComplete) {
+            toast.error(t('hotelFillAllTravelers') || 'Merci de renseigner le prénom et le nom de tous les voyageurs');
             return;
         }
         if (!termsAccepted) {
-            toast.error(t('hotelAcceptTermsRequired'));
+            toast.error(t('hotelAcceptTermsRequired') || "Veuillez accepter les conditions d'utilisation");
             return;
         }
         let captchaToken = '';
         if (!skipRecaptcha) {
-            if (typeof window.grecaptcha?.getResponse === 'function' && recaptchaWidgetId.current !== null) {
-                captchaToken = window.grecaptcha.getResponse(recaptchaWidgetId.current);
+            if (typeof window.grecaptcha?.getResponse === 'function') {
+                try {
+                    captchaToken = (recaptchaWidgetId.current !== null)
+                        ? window.grecaptcha.getResponse(recaptchaWidgetId.current)
+                        : window.grecaptcha.getResponse();
+                } catch {
+                    captchaToken = '';
+                }
             }
             if (!captchaToken) {
-                toast.error(t('hotelRecaptchaRequired'));
+                toast.error(t('hotelRecaptchaRequired') || 'Veuillez valider le reCAPTCHA');
                 return;
             }
         }
 
         setSaving(true);
         try {
+            // Optional re-verification of policies without blocking booking if network/glitch
             try {
-                await getHotelPolicies(option.optionId);
+                const fresh = await getHotelPolicies(option.optionId);
+                if (fresh?.price) {
+                    const fp = Number(fresh.price);
+                    if (!isNaN(fp) && fp > 0) {
+                        option.totalPrice = fp;
+                    }
+                }
             } catch (err) {
-                toast.error(`${t('hotelPoliciesConfirmFailed')}: ${err instanceof Error ? err.message : ''}`);
-                setSaving(false);
-                return;
+                console.warn('[HotelCheckout] Note: Could not re-check policies, proceeding with selected room:', err);
             }
 
             const bookingRooms: BookingRoomInput[] = option.rooms.map((r, i) => ({
                 roomId: r.roomId,
-                adults: rooms[i].adults.map((a) => ({ title: a.title as 'Mr' | 'Mrs' | 'Miss', firstName: a.firstName.trim(), lastName: a.lastName.trim() })),
-                children: rooms[i].children.map((c) => ({ firstName: c.firstName.trim(), lastName: c.lastName.trim() })),
+                adults: rooms[i].adults.map((a) => ({
+                    title: (a.title || 'Mr') as 'Mr' | 'Mrs' | 'Miss',
+                    firstName: a.firstName.trim(),
+                    lastName: a.lastName.trim(),
+                })),
+                children: rooms[i].children.map((c) => ({
+                    firstName: c.firstName.trim(),
+                    lastName: c.lastName.trim(),
+                })),
             }));
 
             // Primary contact identity is taken from the first adult of the
             // first room — that's who's actually leading the booking.
             const lead = rooms[0].adults[0];
 
+            const bookingPrice = Number(state.confirmedPrice ?? option.totalPrice);
+
             const payment = await initiateHotelPayment({
                 optionId: option.optionId,
                 rooms: bookingRooms,
-                contact: { email, firstName: lead.firstName.trim(), lastName: lead.lastName.trim(), phone: phone || undefined },
-                hotelId: undefined, hotelName, checkInDate, checkOutDate,
-                boardType: option.boardType, totalPrice: option.totalPrice, currency: option.currency,
+                contact: {
+                    email: email.trim(),
+                    firstName: lead.firstName.trim(),
+                    lastName: lead.lastName.trim(),
+                    phone: phone.trim() || undefined,
+                },
+                hotelId: state.hotelId ? Number(state.hotelId) : undefined,
+                hotelName,
+                checkInDate,
+                checkOutDate,
+                boardType: option.boardType,
+                totalPrice: isNaN(bookingPrice) ? option.totalPrice : bookingPrice,
+                currency: option.currency,
                 captchaToken,
             });
 
             // orderId isn't carried inside bookingToken — stash it so
             // SatimResult can send it back alongside bt on confirm.
             sessionStorage.setItem(`hotel_satim_orderId_${payment.bookingToken}`, payment.orderId);
+            localStorage.setItem(`hotel_satim_orderId_${payment.bookingToken}`, payment.orderId);
             sessionStorage.setItem('hotel_satim_last_token', payment.bookingToken);
+            localStorage.setItem('hotel_satim_last_token', payment.bookingToken);
+            sessionStorage.setItem('hotel_satim_last_orderId', payment.orderId);
+            localStorage.setItem('hotel_satim_last_orderId', payment.orderId);
             setAppSession();
             window.location.href = payment.formUrl;
         } catch (err) {
-            toast.error(err instanceof Error ? err.message : t('hotelBookingFailed'));
+            toast.error(err instanceof Error ? err.message : (t('hotelBookingFailed') || 'Échec de la réservation'));
+            if (typeof window.grecaptcha?.reset === 'function') {
+                try {
+                    if (recaptchaWidgetId.current !== null) window.grecaptcha.reset(recaptchaWidgetId.current);
+                    else window.grecaptcha.reset();
+                } catch (e) {}
+            }
+            setCaptchaVerified(false);
             setSaving(false);
         }
     };
@@ -388,8 +434,8 @@ export default function HotelCheckout() {
                                 </button>
                                 <Button
                                     onClick={submitBooking}
-                                    disabled={!isValid || saving || !termsAccepted || (!skipRecaptcha && !captchaVerified)}
-                                    className="bg-[#F5A623] hover:bg-[#F5A623]/90 text-[#0B2A5C] font-bold gap-2"
+                                    disabled={saving}
+                                    className="bg-[#F5A623] hover:bg-[#F5A623]/90 text-[#0B2A5C] font-bold gap-2 cursor-pointer shadow-sm hover:shadow active:scale-95 transition-all"
                                 >
                                     {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> {t('hotelProcessingPayment')}</> : <>{t('payNow')} <ArrowRight className="w-4 h-4" /></>}
                                 </Button>

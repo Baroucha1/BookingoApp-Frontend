@@ -567,7 +567,6 @@ export default function RateHawkBooking() {
                                            onChange={(e) => setGuestName({ ...guestName, lastName: e.target.value })}
                                            className="px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition" />
                                 </div>
-                                {!user && <p className="text-sm text-red-600 mt-3">Connectez-vous pour finaliser la réservation.</p>}
                             </div>
 
                             <div className="md:col-span-2">
@@ -586,7 +585,7 @@ export default function RateHawkBooking() {
                                     </div>
                                     <button
                                         onClick={handleConfirmBooking}
-                                        disabled={loading || !guestName.firstName || !guestName.lastName || !user}
+                                        disabled={loading || !guestName.firstName || !guestName.lastName}
                                         className="w-full mt-4 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold py-3 rounded-xl transition disabled:opacity-50"
                                     >
                                         {loading ? 'Confirmation…' : 'Confirmer la réservation'}
