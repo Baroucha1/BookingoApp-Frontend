@@ -37,6 +37,44 @@ const Navbar = () => {
 
 
   const [scrolled, setScrolled] = useState(false);
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+
+  // Hide fixed header when date picker is active in search
+  useEffect(() => {
+    const checkDatePicker = () => {
+      const hasDatePicker =
+        document.body.hasAttribute('data-datepicker-open') ||
+        !!document.querySelector(
+          '[data-date-picker-sheet], [data-date-picker-desktop], [data-hotel-date-picker], .rdp, [aria-roledescription="calendar"]'
+        );
+      setIsDatePickerOpen(hasDatePicker);
+    };
+
+    checkDatePicker();
+
+    const handleEvent = (e: any) => {
+      if (typeof e?.detail?.isOpen === 'boolean') {
+        setIsDatePickerOpen(e.detail.isOpen);
+      } else {
+        checkDatePicker();
+      }
+    };
+
+    window.addEventListener('app-datepicker-toggle', handleEvent);
+
+    const observer = new MutationObserver(checkDatePicker);
+    observer.observe(document.body, {
+      attributes: true,
+      attributeFilter: ['data-datepicker-open'],
+      childList: true,
+      subtree: true,
+    });
+
+    return () => {
+      window.removeEventListener('app-datepicker-toggle', handleEvent);
+      observer.disconnect();
+    };
+  }, []);
 
   useEffect(() => {
     setMobileOpen(false);
@@ -92,6 +130,8 @@ const Navbar = () => {
     location.pathname === '/flights/book' ||
     location.pathname === '/flights/confirmation' ||
     location.pathname === '/flights/v2' ||
+    location.pathname.startsWith('/hotels/checkout') ||
+    location.pathname.startsWith('/hotels/satim/result') ||
     location.pathname.startsWith('/apply') ||
     location.pathname.startsWith('/esim/checkout') ||
     location.pathname.startsWith('/client/pay') ||
@@ -101,20 +141,24 @@ const Navbar = () => {
     return null;
   }
 
-  const isHotelSection = location.pathname.startsWith('/hotels');
-
   const isDarkHeroPage =
     location.pathname === '/' ||
     location.pathname === '/home' ||
     location.pathname === '/index.html' ||
     location.pathname === '/flights' ||
     location.pathname === '/login' ||
-    isHotelSection;
+    location.pathname === '/hotels';
   const isTransparentAndDark = isDarkHeroPage && !scrolled;
 
   return (
       <header
-        className="absolute top-0 inset-x-0 z-[60] transition-all duration-300 bg-transparent px-4 sm:px-8"
+        className={cn(
+          "fixed top-0 inset-x-0 z-[60] transition-all duration-300 px-4 sm:px-8",
+          isDatePickerOpen && "-translate-y-full opacity-0 pointer-events-none",
+          isTransparentAndDark
+            ? "bg-transparent text-white"
+            : "bg-white/95 dark:bg-[#0c1322]/95 backdrop-blur-md shadow-xs border-b border-black/[0.06] dark:border-white/[0.08]"
+        )}
         style={{
           paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.75rem)',
           paddingBottom: '0.75rem',

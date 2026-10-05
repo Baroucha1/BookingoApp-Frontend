@@ -1925,6 +1925,15 @@ const Apply = () => {
         // Only pass genuine client profile ID, never raw User ID (to prevent foreign key violations)
         let effectiveClientId = clientProfileId || (user as any)?.profile?.id || null;
         const token = localStorage.getItem('token');
+        if (!token && !user) {
+            toast({
+                title: "Connexion requise",
+                description: "Veuillez vous connecter pour envoyer votre demande de visa.",
+                variant: 'destructive',
+            });
+            navigate('/login?redirect=' + encodeURIComponent(window.location.pathname + window.location.search));
+            throw new Error("Connexion requise pour soumettre votre demande de visa.");
+        }
         if (!effectiveClientId && token) {
             try {
                 const meRes = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/me`, {
@@ -1997,7 +2006,15 @@ const Apply = () => {
 
     const handlePaySatim = async () => {
         const token = localStorage.getItem('token');
-
+        if (!token && !user) {
+            toast({
+                title: "Connexion requise",
+                description: "Veuillez vous connecter pour envoyer votre demande de visa.",
+                variant: 'destructive',
+            });
+            navigate('/login?redirect=' + encodeURIComponent(window.location.pathname + window.location.search));
+            return;
+        }
 
         if (!termsAccepted) {
             toast({
@@ -2084,6 +2101,15 @@ const Apply = () => {
 
     const handlePayAgence = async () => {
         const token = localStorage.getItem('token');
+        if (!token && !user) {
+            toast({
+                title: "Connexion requise",
+                description: "Veuillez vous connecter pour envoyer votre demande de visa.",
+                variant: 'destructive',
+            });
+            navigate('/login?redirect=' + encodeURIComponent(window.location.pathname + window.location.search));
+            return;
+        }
 
         if (!termsAccepted) {
             toast({

@@ -257,7 +257,12 @@ export default function HotelRoomSelect() {
 
 
 
-            <div className="max-w-4xl mx-auto px-4 pt-24 space-y-6">
+            <div
+                className="max-w-4xl mx-auto px-4 space-y-6"
+                style={{
+                    paddingTop: 'calc(env(safe-area-inset-top, 0px) + 5.5rem)',
+                }}
+            >
                 {/* Hotel Reminder Summary Card */}
                 <div className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div className="flex items-start gap-3.5">

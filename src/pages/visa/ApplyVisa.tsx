@@ -189,8 +189,17 @@ const ApplyVisa = () => {
       toast({ title: language === 'fr' ? 'Formulaire incomplet' : 'Incomplete form', variant: 'destructive' });
       return;
     }
-    setSubmitting(true);
     const token = localStorage.getItem('token');
+    if (!token && !user) {
+      toast({
+        title: language === 'fr' ? 'Connexion requise' : language === 'ar' ? 'تسجيل الدخول مطلوب' : 'Login required',
+        description: language === 'fr' ? 'Veuillez vous connecter pour envoyer votre demande de visa.' : 'Please log in to submit your visa application.',
+        variant: 'destructive',
+      });
+      navigate('/login?redirect=' + encodeURIComponent(window.location.pathname + window.location.search));
+      return;
+    }
+    setSubmitting(true);
     const form = new FormData();
     form.append('visaTypeId', selected.id);
     form.append('fullName', fullName);

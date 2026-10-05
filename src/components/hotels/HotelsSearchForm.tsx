@@ -131,6 +131,21 @@ export default function HotelSearchForm({ onSubmit }: Props) {
             ? Math.max(1, Math.round((checkOutDate.getTime() - checkInDate.getTime()) / 86400000))
             : 0;
 
+    useEffect(() => {
+        const isDateOpen = checkInOpen || checkOutOpen;
+        if (isDateOpen) {
+            document.body.setAttribute('data-datepicker-open', 'true');
+            window.dispatchEvent(new CustomEvent('app-datepicker-toggle', { detail: { isOpen: true } }));
+        } else {
+            document.body.removeAttribute('data-datepicker-open');
+            window.dispatchEvent(new CustomEvent('app-datepicker-toggle', { detail: { isOpen: false } }));
+        }
+        return () => {
+            document.body.removeAttribute('data-datepicker-open');
+            window.dispatchEvent(new CustomEvent('app-datepicker-toggle', { detail: { isOpen: false } }));
+        };
+    }, [checkInOpen, checkOutOpen]);
+
     // Rooms management
     const addRoom = () => {
         if (rooms.length >= 5) return;

@@ -218,7 +218,7 @@ const PublicLayout = () => {
           <Route path="/forgot-password" element={<SafePageTop><ForgotPassword /></SafePageTop>} />
           <Route path="/verify-reset-otp" element={<SafePageTop><VerifyResetOtp /></SafePageTop>} />
           <Route path="/reset-password" element={<SafePageTop><ResetPasswordForm /></SafePageTop>} />
-          <Route path="/satim/result" element={<SatimResult />} />
+          <Route path="/satim/result" element={<SafePageTop><SatimResult /></SafePageTop>} />
           <Route path="/receipt/:applicationId" element={<ReceiptPDF />} />
           <Route path="/client/pay/:applicationId" element={<PayApplication />} />
           <Route path="/apply" element={<Apply />} />

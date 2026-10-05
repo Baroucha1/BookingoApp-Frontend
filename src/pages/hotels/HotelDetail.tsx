@@ -274,7 +274,7 @@ export default function HotelDetail() {
 
                 <div
                     className="relative z-20 max-w-6xl mx-auto px-4 sm:px-6 h-full flex flex-col justify-between pb-6"
-                    style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 4.5rem)' }}
+                    style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 5.5rem)' }}
                 >
                     <div className="flex items-center">
                         <NativeBackButton variant="none" fallbackTo="/hotels" />

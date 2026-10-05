@@ -781,6 +781,7 @@ function MobileDateSheet({ mode, startDate, endDate, onSelectStart, onSelectEnd,
 
     return createPortal(
         <div 
+            data-date-picker-sheet="true"
             className="fixed inset-0 z-[9999] bg-white flex flex-col"
             style={{
                 paddingTop: 'env(safe-area-inset-top, 0px)',
@@ -854,6 +855,20 @@ export function DateRangePicker({ tripType, startDate, endDate, onChangeStart, o
 
     const openPicker = () => setOpen(true);
     const closePicker = () => setOpen(false);
+
+    useEffect(() => {
+        if (open) {
+            document.body.setAttribute('data-datepicker-open', 'true');
+            window.dispatchEvent(new CustomEvent('app-datepicker-toggle', { detail: { isOpen: true } }));
+        } else {
+            document.body.removeAttribute('data-datepicker-open');
+            window.dispatchEvent(new CustomEvent('app-datepicker-toggle', { detail: { isOpen: false } }));
+        }
+        return () => {
+            document.body.removeAttribute('data-datepicker-open');
+            window.dispatchEvent(new CustomEvent('app-datepicker-toggle', { detail: { isOpen: false } }));
+        };
+    }, [open]);
 
     // Outside click still closes it — that part was never the problem
     useEffect(() => {
@@ -933,6 +948,7 @@ export function DateRangePicker({ tripType, startDate, endDate, onChangeStart, o
             {open && !isMobile && popoverPos && createPortal(
                 <div
                     ref={popoverRef}
+                    data-date-picker-desktop="true"
                     className="absolute z-[999] bg-white border border-[#E2E8F0] rounded-xl shadow-2xl"
                     style={{ top: popoverPos.top, left: popoverPos.left }}
                 >

@@ -761,9 +761,14 @@ const Visa = () => {
 
           {/* ══════════════════ HERO ═════════════════════════════════════════════ */}
           <section className="relative min-h-[550px] md:min-h-[650px] flex items-center w-full">
-            <div className="container mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center pt-24">
+            <div
+              className="container mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center"
+              style={{
+                paddingTop: 'calc(env(safe-area-inset-top, 0px) + 5.5rem)',
+              }}
+            >
 
-              <div className="w-full md:w-7/12 lg:w-1/2 text-left mt-10 md:mt-0">
+              <div className="w-full md:w-7/12 lg:w-1/2 text-left mt-6 md:mt-0">
                 {renderHeadline()}
                 <p className="mt-4 text-[#002161]/80 text-base sm:text-lg md:text-xl max-w-md font-medium">
                   {heroSub}
