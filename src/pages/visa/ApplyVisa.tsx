@@ -234,7 +234,10 @@ const ApplyVisa = () => {
     <div
       className="container max-w-2xl px-4 pb-6 sm:pb-10"
       style={{
-        paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1.5rem)',
+        paddingTop: 'calc(max(env(safe-area-inset-top, 0px), 48px) + 0.75rem)',
+        paddingBottom: 'calc(max(env(safe-area-inset-bottom, 0px), 20px) + 2rem)',
+        paddingLeft: 'env(safe-area-inset-left, 0px)',
+        paddingRight: 'env(safe-area-inset-right, 0px)',
       }}
     >
       <button

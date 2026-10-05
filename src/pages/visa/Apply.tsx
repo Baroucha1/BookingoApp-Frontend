@@ -2267,7 +2267,13 @@ const Apply = () => {
 
     if (paid) {
         return (
-            <div className="relative min-h-screen flex items-center justify-center px-4 py-12 bg-[#F4F6FB]">
+            <div
+                className="relative min-h-screen flex items-center justify-center px-4 py-12 bg-[#F4F6FB]"
+                style={{
+                    paddingTop: 'calc(max(env(safe-area-inset-top, 0px), 48px) + 1rem)',
+                    paddingBottom: 'calc(max(env(safe-area-inset-bottom, 0px), 20px) + 2rem)',
+                }}
+            >
                 <div className="text-center max-w-md w-full space-y-5 bg-white rounded-3xl p-10 shadow-xl">
                     <div className="relative w-24 h-24 mx-auto">
                         <span className="absolute inset-0 rounded-full animate-ping bg-blue-100" />
@@ -2320,15 +2326,18 @@ const Apply = () => {
     }
 
     return (
-        <div className="min-h-screen relative overflow-hidden bg-[#F4F6FB] pb-20 sm:pb-24">
+        <div
+            className="min-h-screen relative overflow-hidden bg-[#F4F6FB]"
+            style={{
+                paddingTop: 'calc(max(env(safe-area-inset-top, 0px), 48px) + 0.75rem)',
+                paddingBottom: 'calc(max(env(safe-area-inset-bottom, 0px), 20px) + 5rem)',
+                paddingLeft: 'env(safe-area-inset-left, 0px)',
+                paddingRight: 'env(safe-area-inset-right, 0px)',
+            }}
+        >
             <div className="absolute inset-0 pointer-events-none opacity-[0.03] bg-[url('/assets/map-pattern.png')] bg-cover bg-center" />
 
-            <div
-                className="container relative z-10 max-w-7xl mx-auto px-3 sm:px-4"
-                style={{
-                    paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1rem)',
-                }}
-            >
+            <div className="container relative z-10 max-w-7xl mx-auto px-3 sm:px-4">
 
                 {/* ── Top Back Button ── */}
                 <div className="mb-4">
